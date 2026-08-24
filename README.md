@@ -1,2 +1,3 @@
 # AI_hub
+# 2026
 AI orchestration layer — RAG retrieval, service automation pipelines, AI agent connectors etc...
