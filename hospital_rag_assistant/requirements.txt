@@ -1,0 +1,32 @@
+# torch 는 Dockerfile 에서 CPU 인덱스로 먼저 설치한다 (여기 넣지 말 것)
+
+# DB / 검색
+psycopg[binary]
+pgvector
+sqlalchemy
+
+# 한국어 형태소 토크나이즈 (BM25)
+kiwipiepy
+
+# 임베딩 / 리랭커
+sentence-transformers
+FlagEmbedding
+
+# 가드레일 모델 로컬 추론 (CPU 검증용)
+transformers
+accelerate
+
+# 파이프라인 / API
+pydantic
+pydantic-settings
+fastapi
+uvicorn[standard]
+httpx
+
+# 실험 / 평가
+pandas
+numpy
+scikit-learn
+datasets
+jupyterlab
+tabulate

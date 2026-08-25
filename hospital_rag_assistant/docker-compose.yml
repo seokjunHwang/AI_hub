@@ -1,0 +1,75 @@
+# 개발용 스택. 서비스 3개, 같은 네트워크.
+#   db        PostgreSQL 17 + pgvector
+#   app       파이프라인·노트북 (CPU)
+#   guardrail kanana-safeguard 서빙 (GPU, profile로 옵션화)
+#
+#   docker compose up -d db app              # 평소
+#   docker compose --profile gpu up -d       # GPU 준비된 뒤
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: hra-db
+    environment:
+      POSTGRES_DB: hra
+      POSTGRES_USER: hra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hra_dev_only}
+    ports:
+      - "5433:5432"                 # 호스트에서 DBeaver 등으로 붙을 때
+    volumes:
+      - hra_pgdata:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro   # 최초 기동 시 schema.sql 자동 적용
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hra -d hra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    shm_size: 1gb                   # HNSW 인덱스 빌드용
+
+  app:
+    build: .
+    container_name: hra-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hra:${POSTGRES_PASSWORD:-hra_dev_only}@db:5432/hra
+      GUARDRAIL_URL: http://guardrail:8000/v1
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - .:/workspace                # 코드 bind mount -> 수정 즉시 반영, 재빌드 불필요
+      - hra_hfcache:/cache/hf       # HF 모델 캐시. named volume이라 재생성해도 유지
+      - hra_artifacts:/artifacts    # 임베딩·인덱스 산출물 (Windows I/O 회피)
+    ports:
+      - "8000:8000"                 # API
+      - "8888:8888"                 # jupyter lab
+    tty: true
+    stdin_open: true
+    command: bash
+
+  # GPU 준비 후에만 기동. vLLM은 WSL2 + nvidia-container-toolkit 필요.
+  guardrail:
+    image: vllm/vllm-openai:latest
+    container_name: hra-guardrail
+    profiles: ["gpu"]
+    environment:
+      HF_HOME: /cache/hf
+    volumes:
+      - hra_hfcache:/cache/hf
+    command: >
+      --model kakaocorp/kanana-safeguard-prompt-2.1b
+      --max-model-len 4096
+      --gpu-memory-utilization 0.35
+    ports:
+      - "8001:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
+volumes:
+  hra_pgdata:
+  hra_hfcache:
+  hra_artifacts:
