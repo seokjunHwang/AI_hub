@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ m.title }}</title>
+<style>
+  :root{
+    --bg:#fbfbfa; --card:#fff; --fg:#1f1f1d; --muted:#6b6b66; --line:#e6e4df;
+    --accent:#4a5d4e; --warn:#8a5a2b; --warnbg:#fdf6ec; --chip:#f0efeb;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17181a; --card:#1f2023; --fg:#e8e8e5; --muted:#9a9a95; --line:#32343a;
+           --accent:#9ec2a6; --warn:#d8a566; --warnbg:#2a2418; --chip:#2a2c31; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px 20px 64px;background:var(--bg);color:var(--fg);
+       font:15px/1.65 -apple-system,"Segoe UI","Malgun Gothic",system-ui,sans-serif}
+  main{max-width:900px;margin:0 auto}
+  h1{font-size:1.7rem;margin:0 0 6px;letter-spacing:-.01em}
+  .meta{color:var(--muted);font-size:.88rem;margin-bottom:20px}
+  .lead{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
+        border-radius:8px;padding:14px 16px;margin:0 0 28px;font-size:1.05rem}
+  h2{font-size:1.05rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+     margin:34px 0 12px;font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;
+        padding:14px 16px;margin-bottom:10px}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+  table{width:100%;border-collapse:collapse;font-size:.93rem;min-width:560px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  .chip{display:inline-block;padding:1px 8px;border-radius:20px;background:var(--chip);
+        font-size:.78rem;color:var(--muted)}
+  .todo{font-weight:600;font-size:.85rem;white-space:nowrap}
+  /* 회의에서 안 정해짐 = 사람에게 물어야 함 / 녹취 불확실 = 오디오를 다시 들어야 함
+     다음 행동이 다르므로 색으로 구분한다 */
+  .todo.not_stated{color:var(--warn)}
+  .todo.unclear{color:var(--muted);text-decoration:underline dotted}
+  .pending{background:var(--warnbg);border:1px solid var(--warn);border-radius:8px;
+           padding:10px 14px;margin:10px 0 0;font-size:.9rem;color:var(--warn)}
+  .quote{color:var(--muted);font-size:.88rem;margin-top:8px;padding-left:10px;
+         border-left:2px solid var(--line)}
+  .why{margin:6px 0 0;font-size:.93rem}
+  .blocker{color:var(--warn);font-weight:600}
+  .unclear{background:var(--warnbg);border-color:var(--warn)}
+  footer{margin-top:44px;color:var(--muted);font-size:.8rem;border-top:1px solid var(--line);padding-top:14px}
+  ul{margin:0;padding-left:18px}
+</style>
+</head>
+<body>
+<main>
+  <h1>{{ m.title }}</h1>
+  <div class="meta">
+    {% if m.date %}{{ m.date }}{% endif %}
+    {% if m.participants %} · {{ m.participants | join(', ') }}{% endif %}
+  </div>
+
+  <p class="lead">{{ m.one_liner }}</p>
+
+  {% if m.action_items %}
+  <h2>액션아이템 ({{ m.action_items | length }})</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>할 일</th><th>담당</th><th>마감</th><th>우선도</th></tr></thead>
+      <tbody>
+      {% for a in m.action_items %}
+        <tr>
+          <td>{{ a.task }}<div class="quote">“{{ a.quote }}”{% if a.timestamp %} · {{ a.timestamp }}{% endif %}</div></td>
+          <td>{% if a.owner %}{{ a.owner }}{% else %}<span class="todo {{ a.owner_status }}">{{ a.owner_display }}</span>{% endif %}</td>
+          <td>{% if a.due %}{{ a.due }}{% else %}<span class="todo {{ a.due_status }}">{{ a.due_display }}</span>{% endif %}</td>
+          <td><span class="chip">{{ a.priority }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set pending = m.action_items | selectattr('needs_human') | list %}
+  {% if pending %}
+  <p class="pending">
+    확정 전 확인 필요 {{ pending | length }}건 —
+    «회의에서 안 정해짐» 은 참석자에게, «녹취 불확실» 은 원본 오디오를 다시 확인하세요.
+    추측으로 채우지 마세요.
+  </p>
+  {% endif %}
+  {% endif %}
+
+  {% if m.decisions %}
+  <h2>결정사항 ({{ m.decisions | length }})</h2>
+  {% for d in m.decisions %}
+    <div class="card">
+      <strong>{{ d.decision }}</strong>
+      {% if d.rationale %}<p class="why"><span class="chip">왜</span> {{ d.rationale }}</p>{% endif %}
+      {% if d.alternatives %}<p class="why"><span class="chip">미채택</span> {{ d.alternatives | join(' / ') }}</p>{% endif %}
+      <div class="quote">“{{ d.quote }}”{% if d.timestamp %} · {{ d.timestamp }}{% endif %}</div>
+    </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if m.open_questions %}
+  <h2>미결 사항</h2>
+  <div class="card">
+    <ul>
+    {% for q in m.open_questions %}
+      <li>{% if q.blocker %}<span class="blocker">[블로커]</span> {% endif %}{{ q.question }}
+      {% if q.who_should_answer %} <span class="chip">{{ q.who_should_answer }}</span>{% endif %}</li>
+    {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if m.topics %}
+  <h2>논의 내용</h2>
+  {% for t in m.topics %}
+    <div class="card">
+      <strong>{{ t.title }}</strong>
+      {% if t.timestamp_start %}<span class="chip">{{ t.timestamp_start }}</span>{% endif %}
+      <p class="why">{{ t.summary }}</p>
+    </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if m.unclear_notes %}
+  <h2>확인 필요</h2>
+  <div class="card unclear">
+    <ul>
+    {% for u in m.unclear_notes %}<li>{{ u }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <footer>
+    {{ b.model }} 자동 생성 · {{ b.generated_at }}
+    {% if b.source_audio %} · 원본 {{ b.source_audio }}{% endif %} · 녹취 {{ b.transcript_chars }}자
+  </footer>
+</main>
+</body>
+</html>
