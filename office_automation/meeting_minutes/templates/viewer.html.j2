@@ -62,11 +62,12 @@
   <h2>액션아이템 ({{ m.action_items | length }})</h2>
   <div class="tablewrap">
     <table>
-      <thead><tr><th>할 일</th><th>담당</th><th>마감</th><th>우선도</th></tr></thead>
+      <thead><tr><th>할 일</th><th>논의</th><th>담당</th><th>마감</th><th>우선도</th></tr></thead>
       <tbody>
       {% for a in m.action_items %}
         <tr>
           <td>{{ a.task }}<div class="quote">“{{ a.quote }}”{% if a.timestamp %} · {{ a.timestamp }}{% endif %}</div></td>
+          <td>{% if a.topic in m.topic_titles %}<span class="chip">{{ a.topic }}</span>{% else %}<span class="todo unclear">논의 연결 없음</span>{% endif %}</td>
           <td>{% if a.owner %}{{ a.owner }}{% else %}<span class="todo {{ a.owner_status }}">{{ a.owner_display }}</span>{% endif %}</td>
           <td>{% if a.due %}{{ a.due }}{% else %}<span class="todo {{ a.due_status }}">{{ a.due_display }}</span>{% endif %}</td>
           <td><span class="chip">{{ a.priority }}</span></td>
@@ -90,6 +91,7 @@
   {% for d in m.decisions %}
     <div class="card">
       <strong>{{ d.decision }}</strong>
+      <p class="why">{% if d.topic in m.topic_titles %}<span class="chip">논의</span> {{ d.topic }}{% else %}<span class="todo unclear">논의 연결 없음</span>{% endif %}</p>
       {% if d.rationale %}<p class="why"><span class="chip">왜</span> {{ d.rationale }}</p>{% endif %}
       {% if d.alternatives %}<p class="why"><span class="chip">미채택</span> {{ d.alternatives | join(' / ') }}</p>{% endif %}
       <div class="quote">“{{ d.quote }}”{% if d.timestamp %} · {{ d.timestamp }}{% endif %}</div>
@@ -103,7 +105,8 @@
     <ul>
     {% for q in m.open_questions %}
       <li>{% if q.blocker %}<span class="blocker">[블로커]</span> {% endif %}{{ q.question }}
-      {% if q.who_should_answer %} <span class="chip">{{ q.who_should_answer }}</span>{% endif %}</li>
+      {% if q.who_should_answer %} <span class="chip">{{ q.who_should_answer }}</span>{% endif %}
+      {% if q.topic in m.topic_titles %}<span class="chip">{{ q.topic }}</span>{% else %}<span class="todo unclear">논의 연결 없음</span>{% endif %}</li>
     {% endfor %}
     </ul>
   </div>
@@ -116,6 +119,10 @@
       <strong>{{ t.title }}</strong>
       {% if t.timestamp_start %}<span class="chip">{{ t.timestamp_start }}</span>{% endif %}
       <p class="why">{{ t.summary }}</p>
+      {% set from_here = m.items_by_topic(t.title) %}
+      {% if from_here %}
+      <p class="why">{% for lab, text in from_here %}<span class="chip">{{ lab }}</span> {{ text }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+      {% endif %}
     </div>
   {% endfor %}
   {% endif %}

@@ -28,6 +28,40 @@ class Uploaded:
     link: str
 
 
+@dataclass
+class UploadResult:
+    """업로드 결과 + «어디에 저장됐는지»."""
+
+    files: List[Uploaded]
+    folder_path: str          # 내 드라이브 / 회의록 / <slug>
+    folder_id: str
+    folder_link: str
+    account: str = ""
+
+    def report(self) -> str:
+        lines = [
+            f"계정   {self.account or '(확인 안 됨)'}",
+            f"위치   {self.folder_path}",
+            f"폴더   {self.folder_link}",
+            "",
+            "올린 파일",
+        ]
+        lines += [f"  {u.name}" + (f"\n    {u.link}" if u.link else "") for u in self.files]
+        return "\n".join(lines)
+
+
+def _folder_link(folder_id: str) -> str:
+    return f"https://drive.google.com/drive/folders/{folder_id}"
+
+
+def _account_email(svc) -> str:
+    try:
+        about = svc.about().get(fields="user(emailAddress)").execute()
+        return about.get("user", {}).get("emailAddress", "")
+    except Exception:
+        return ""
+
+
 def _service():
     try:
         from google.auth.transport.requests import Request
@@ -156,22 +190,48 @@ def upload_file(
 
 
 def upload_minutes(
-    md: Path, html: Path, json_path: Path, subfolder: str | None = None, as_gdoc: bool = True
-) -> list[Uploaded]:
-    """회의록 3종을 드라이브에 올린다.
+    md: Path,
+    html: Path,
+    json_path: Path,
+    subfolder: str | None = None,
+    as_gdoc: bool | None = None,
+) -> UploadResult:
+    """회의록 3종을 드라이브에 올리고 «어디에 올렸는지» 까지 돌려준다.
 
     구조: {DRIVE_FOLDER_NAME}/{subfolder}/  (subfolder 는 보통 회의 slug)
+
+    반환값이 리스트가 아니라 UploadResult 다 — 파일 링크만 주면 «내 드라이브 어디에
+    들어갔는지» 를 알 수 없어서, 계정·폴더 경로·폴더 링크를 함께 담는다.
     """
+    if as_gdoc is None:
+        as_gdoc = CFG.drive_as_gdoc
+
     svc = _service()
+    account = _account_email(svc)
+
     root = ensure_folder(svc, CFG.drive_folder_name, CFG.drive_parent_id)
     target = ensure_folder(svc, subfolder, root) if subfolder else root
 
-    out = [
+    # 사람이 읽는 경로. DRIVE_PARENT_ID 를 쓰면 그 위 단계는 알 수 없어 그대로 표시한다.
+    parts = ["내 드라이브"] if not CFG.drive_parent_id else [f"(부모 {CFG.drive_parent_id})"]
+    parts.append(CFG.drive_folder_name)
+    if subfolder:
+        parts.append(subfolder)
+    folder_path = " / ".join(parts)
+
+    files = [
         upload_file(svc, md, target),
         upload_file(svc, json_path, target),
     ]
     # HTML 은 원본 + (선택) Google Docs 변환본 둘 다. 변환본이 있으면 드라이브에서 바로 읽힌다.
-    out.append(upload_file(svc, html, target))
+    files.append(upload_file(svc, html, target))
     if as_gdoc:
-        out.append(upload_file(svc, html, target, mime="text/html", as_gdoc=True))
-    return out
+        files.append(upload_file(svc, html, target, mime="text/html", as_gdoc=True))
+
+    return UploadResult(
+        files=files,
+        folder_path=folder_path,
+        folder_id=target,
+        folder_link=_folder_link(target),
+        account=account,
+    )

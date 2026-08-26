@@ -43,6 +43,14 @@ class ActionItem(BaseModel):
         default="not_stated", description="due 가 비어 있는 이유. owner_status 와 같은 기준"
     )
     priority: Literal["high", "medium", "low", "unknown"] = "unknown"
+    topic: Optional[str] = Field(
+        default=None,
+        description=(
+            "이 항목이 나온 논의 주제. topics[].title 과 «글자 그대로 같은» 문자열이어야 한다. "
+            "어느 주제에도 속하지 않으면 그 주제를 topics 에 추가하거나, "
+            "회의 산출물이 아닌 잡담이면 이 항목을 추출하지 않는다"
+        ),
+    )
     quote: str = Field(description="근거가 된 발언 원문 (transcript 에서 그대로 인용)")
     timestamp: Optional[str] = Field(default=None, description="발언 시각 HH:MM:SS")
 
@@ -80,6 +88,14 @@ class Decision(BaseModel):
     alternatives: List[str] = Field(
         default_factory=list, description="검토했지만 채택하지 않은 대안"
     )
+    topic: Optional[str] = Field(
+        default=None,
+        description=(
+            "이 항목이 나온 논의 주제. topics[].title 과 «글자 그대로 같은» 문자열이어야 한다. "
+            "어느 주제에도 속하지 않으면 그 주제를 topics 에 추가하거나, "
+            "회의 산출물이 아닌 잡담이면 이 항목을 추출하지 않는다"
+        ),
+    )
     quote: str = Field(description="근거 발언 원문")
     timestamp: Optional[str] = None
 
@@ -88,6 +104,15 @@ class OpenQuestion(BaseModel):
     question: str = Field(description="회의에서 결론이 안 난 쟁점 또는 미확인 사항")
     blocker: bool = Field(default=False, description="이게 막히면 다른 일이 못 나가는가")
     who_should_answer: Optional[str] = None
+    topic: Optional[str] = Field(
+        default=None,
+        description=(
+            "이 항목이 나온 논의 주제. topics[].title 과 «글자 그대로 같은» 문자열이어야 한다. "
+            "어느 주제에도 속하지 않으면 그 주제를 topics 에 추가하거나, "
+            "회의 산출물이 아닌 잡담이면 이 항목을 추출하지 않는다"
+        ),
+    )
+
 
 
 class Topic(BaseModel):
@@ -114,6 +139,28 @@ class Minutes(BaseModel):
         default_factory=list,
         description="STT 오인식으로 의미가 불확실한 구간. 사람이 확인해야 할 지점",
     )
+
+    @property
+    def topic_titles(self) -> List[str]:
+        """topic 연결이 유효한지 확인할 때 쓰는 정본 목록."""
+        return [t.title for t in self.topics]
+
+    def items_by_topic(self, title: str) -> List[tuple]:
+        """이 주제에서 나온 결정·액션·미결. (라벨, 내용) 목록.
+
+        표에서 논의로 가는 링크만 있으면 반쪽이다. 논의를 읽는 사람도
+        "이 얘기가 뭐로 이어졌지" 를 되짚을 수 있어야 한다.
+        """
+        out: List[tuple] = []
+        for kind, items, text in (
+            ("D", self.decisions, lambda x: x.decision),
+            ("A", self.action_items, lambda x: x.task),
+            ("Q", self.open_questions, lambda x: x.question),
+        ):
+            for i, it in enumerate(items, 1):
+                if it.topic == title:
+                    out.append((f"{kind}{i}", text(it)))
+        return out
 
 
 class MinutesBundle(BaseModel):

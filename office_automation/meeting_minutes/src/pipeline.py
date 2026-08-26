@@ -121,7 +121,8 @@ def _finalize(bundle: MinutesBundle, args: argparse.Namespace) -> int:
     if args.upload:
         from .drive import upload_minutes
 
-        upload_minutes(out.md, out.html, out.json, subfolder=out.slug)
+        res = upload_minutes(out.md, out.html, out.json, subfolder=out.slug)
+        print(res.report())
 
     _warn_blanks(final)
     return 0

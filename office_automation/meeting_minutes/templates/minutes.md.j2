@@ -7,11 +7,17 @@
 {% if m.action_items %}
 ## 액션아이템
 
-| 할 일 | 담당 | 마감 | 우선도 |
-|---|---|---|---|
+| 할 일 | 논의 | 담당 | 마감 | 우선도 |
+|---|---|---|---|---|
 {% for a in m.action_items %}
-| {{ a.task }} | {{ a.owner or '**' ~ a.owner_display ~ '**' }} | {{ a.due or '**' ~ a.due_display ~ '**' }} | {{ a.priority }} |
+| {{ a.task }} | {{ a.topic if a.topic in m.topic_titles else '**논의 연결 없음**' }} | {{ a.owner or '**' ~ a.owner_display ~ '**' }} | {{ a.due or '**' ~ a.due_display ~ '**' }} | {{ a.priority }} |
 {% endfor %}
+
+{% set orphans = m.action_items | rejectattr('topic', 'in', m.topic_titles) | list %}
+{% if orphans %}
+> **논의 연결 없음 {{ orphans | length }}건** — 논의 내용 어디에도 근거가 없는 액션입니다.
+> 논의가 빠진 것인지, 잡담이라 액션이 아닌 것인지 확인하세요.
+{% endif %}
 
 {% set pending = m.action_items | selectattr('needs_human') | list %}
 {% if pending %}
@@ -26,6 +32,7 @@
 {% for d in m.decisions %}
 ### {{ loop.index }}. {{ d.decision }}
 
+- **논의**: {{ d.topic if d.topic in m.topic_titles else '**논의 연결 없음**' }}
 {% if d.rationale %}
 - **왜**: {{ d.rationale }}
 {% endif %}
@@ -40,7 +47,7 @@
 ## 미결 사항
 
 {% for q in m.open_questions %}
-- {{ '**[블로커]** ' if q.blocker else '' }}{{ q.question }}{{ (' — 확인: ' ~ q.who_should_answer) if q.who_should_answer else '' }}
+- {{ '**[블로커]** ' if q.blocker else '' }}{{ q.question }}{{ (' — 확인: ' ~ q.who_should_answer) if q.who_should_answer else '' }} `{{ q.topic if q.topic in m.topic_titles else '논의 연결 없음' }}`
 {% endfor %}
 
 {% endif %}
@@ -51,6 +58,13 @@
 ### {{ t.title }}{{ (' `' ~ t.timestamp_start ~ '`') if t.timestamp_start else '' }}
 
 {{ t.summary }}
+
+{% set from_here = m.items_by_topic(t.title) %}
+{% if from_here %}
+{% for lab, text in from_here %}
+> **{{ lab }}** {{ text }}
+{% endfor %}
+{% endif %}
 
 {% endfor %}
 {% endif %}
