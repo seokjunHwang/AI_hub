@@ -1,0 +1,243 @@
+"""Google Drive 업로드.
+
+인증: OAuth 설치형 앱 흐름(최초 1회 브라우저) -> token.json 캐시.
+서비스 계정은 개인 My Drive 에 쓸 수 없다(공유 드라이브만) -> 사용자 OAuth 를 쓴다.
+
+스코프 주의
+  drive.file (기본)  이 앱이 만든 파일/폴더만 접근. 최소 권한이므로 권장.
+                     -> DRIVE_PARENT_ID 로 "수동으로 만든 기존 폴더"를 지정하면 실패할 수 있다.
+  drive              드라이브 전체 접근. 기존 폴더에 넣어야 할 때만 DRIVE_SCOPE 로 승격.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
+
+from .config import CFG
+
+GDOC_MIME = "application/vnd.google-apps.document"
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+@dataclass
+class Uploaded:
+    name: str
+    file_id: str
+    link: str
+
+
+@dataclass
+class UploadResult:
+    """업로드 결과 + «어디에 저장됐는지»."""
+
+    files: List[Uploaded]
+    folder_path: str          # 내 드라이브 / 회의록 / <slug>
+    folder_id: str
+    folder_link: str
+    account: str = ""
+
+    def report(self) -> str:
+        lines = [
+            f"계정   {self.account or '(확인 안 됨)'}",
+            f"위치   {self.folder_path}",
+            f"폴더   {self.folder_link}",
+            "",
+            "올린 파일",
+        ]
+        lines += [f"  {u.name}" + (f"\n    {u.link}" if u.link else "") for u in self.files]
+        return "\n".join(lines)
+
+
+def _folder_link(folder_id: str) -> str:
+    return f"https://drive.google.com/drive/folders/{folder_id}"
+
+
+def _account_email(svc) -> str:
+    try:
+        about = svc.about().get(fields="user(emailAddress)").execute()
+        return about.get("user", {}).get("emailAddress", "")
+    except Exception:
+        return ""
+
+
+def _service():
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+    except ImportError as e:  # pragma: no cover
+        raise SystemExit(
+            "구글 드라이브 연동에 필요한 패키지가 없습니다:\n"
+            "  pip install google-api-python-client google-auth-oauthlib"
+        ) from e
+
+    scopes = [CFG.drive_scope]
+    creds: Optional[Credentials] = None
+
+    if CFG.drive_token.exists():
+        creds = Credentials.from_authorized_user_file(str(CFG.drive_token), scopes)
+        # DRIVE_SCOPE 를 올렸는데 토큰이 옛 스코프면 refresh 로는 권한이 늘지 않는다.
+        # 그대로 두면 업로드 시점에 403 이 나므로 여기서 잡고 재인증한다.
+        granted = set(creds.scopes or [])
+        if granted and not set(scopes) <= granted:
+            print(f"[drive] 토큰 스코프가 요청과 다릅니다. 재인증합니다.")
+            print(f"        보유: {sorted(granted)}")
+            print(f"        요청: {scopes}")
+            creds = None
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            if not CFG.drive_credentials.exists():
+                raise SystemExit(
+                    f"OAuth 클라이언트 파일이 없습니다: {CFG.drive_credentials}\n"
+                    "Google Cloud Console > API 및 서비스 > 사용자 인증 정보 에서\n"
+                    "'데스크톱 앱' OAuth 클라이언트를 만들어 credentials.json 으로 저장하세요."
+                )
+            flow = InstalledAppFlow.from_client_secrets_file(
+                str(CFG.drive_credentials), scopes
+            )
+            creds = flow.run_local_server(port=0)
+        CFG.drive_token.write_text(creds.to_json(), encoding="utf-8")
+        print(f"[drive] 토큰 저장: {CFG.drive_token}")
+
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _q(value: str) -> str:
+    """Drive 쿼리 문자열 리터럴 이스케이프.
+
+    폴더명/회의 제목에 ' 가 들어가면(예: "Kim's 회의록") 인용부호가 어긋나
+    Drive API 가 400 을 던진다. 백슬래시 이스케이프가 규격이다.
+    """
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def ensure_folder(svc, name: str, parent_id: str = "") -> str:
+    """이름으로 폴더를 찾고 없으면 만든다. 폴더 ID 반환."""
+    q = [
+        f"mimeType = '{FOLDER_MIME}'",
+        f"name = '{_q(name)}'",
+        "trashed = false",
+    ]
+    if parent_id:
+        q.append(f"'{parent_id}' in parents")
+    res = (
+        svc.files()
+        .list(
+            q=" and ".join(q),
+            spaces="drive",
+            fields="files(id, name)",
+            pageSize=1,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    files = res.get("files", [])
+    if files:
+        return files[0]["id"]
+
+    body = {"name": name, "mimeType": FOLDER_MIME}
+    if parent_id:
+        body["parents"] = [parent_id]
+    folder = (
+        svc.files()
+        .create(body=body, fields="id", supportsAllDrives=True)
+        .execute()
+    )
+    print(f"[drive] 폴더 생성: {name}")
+    return folder["id"]
+
+
+def upload_file(
+    svc, path: Path, folder_id: str, mime: str | None = None, as_gdoc: bool = False
+) -> Uploaded:
+    from googleapiclient.http import MediaFileUpload
+
+    guess = {
+        ".md": "text/markdown",
+        ".html": "text/html",
+        ".json": "application/json",
+        ".txt": "text/plain",
+    }
+    src_mime = mime or guess.get(path.suffix.lower(), "application/octet-stream")
+
+    body: dict = {"name": path.name, "parents": [folder_id]}
+    if as_gdoc:
+        # HTML -> Google Docs 변환 업로드. 확장자를 뗀 이름으로 문서 생성.
+        body["name"] = path.stem
+        body["mimeType"] = GDOC_MIME
+
+    media = MediaFileUpload(str(path), mimetype=src_mime, resumable=True)
+    f = (
+        svc.files()
+        .create(
+            body=body,
+            media_body=media,
+            fields="id, name, webViewLink",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    up = Uploaded(name=f["name"], file_id=f["id"], link=f.get("webViewLink", ""))
+    print(f"[drive] 업로드: {up.name} -> {up.link}")
+    return up
+
+
+def upload_minutes(
+    md: Path,
+    html: Path,
+    json_path: Path,
+    subfolder: str | None = None,
+    as_gdoc: bool | None = None,
+) -> UploadResult:
+    """회의록 3종을 드라이브에 올리고 «어디에 올렸는지» 까지 돌려준다.
+
+    구조: {DRIVE_FOLDER_NAME}/{subfolder}/  (subfolder 는 보통 회의 slug)
+
+    반환값이 리스트가 아니라 UploadResult 다 — 파일 링크만 주면 «내 드라이브 어디에
+    들어갔는지» 를 알 수 없어서, 계정·폴더 경로·폴더 링크를 함께 담는다.
+    """
+    if as_gdoc is None:
+        as_gdoc = CFG.drive_as_gdoc
+
+    #  같은 회의를 여러 번 올릴 때 «어느 것이 최신인지» 를 폴더명만 보고 알 수 있게
+    #  업로드 시각을 괄호로 붙인다.
+    if subfolder:
+        subfolder = f"{subfolder} ({datetime.now().strftime('%Y-%m-%d %H%M')})"
+
+    svc = _service()
+    account = _account_email(svc)
+
+    root = ensure_folder(svc, CFG.drive_folder_name, CFG.drive_parent_id)
+    target = ensure_folder(svc, subfolder, root) if subfolder else root
+
+    # 사람이 읽는 경로. DRIVE_PARENT_ID 를 쓰면 그 위 단계는 알 수 없어 그대로 표시한다.
+    parts = ["내 드라이브"] if not CFG.drive_parent_id else [f"(부모 {CFG.drive_parent_id})"]
+    parts.append(CFG.drive_folder_name)
+    if subfolder:
+        parts.append(subfolder)
+    folder_path = " / ".join(parts)
+
+    files = [
+        upload_file(svc, md, target),
+        upload_file(svc, json_path, target),
+    ]
+    # HTML 은 원본 + (선택) Google Docs 변환본 둘 다. 변환본이 있으면 드라이브에서 바로 읽힌다.
+    files.append(upload_file(svc, html, target))
+    if as_gdoc:
+        files.append(upload_file(svc, html, target, mime="text/html", as_gdoc=True))
+
+    return UploadResult(
+        files=files,
+        folder_path=folder_path,
+        folder_id=target,
+        folder_link=_folder_link(target),
+        account=account,
+    )

@@ -1,0 +1,1254 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>하네스로 기획하기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@600;700;900&display=swap">
+</head>
+<body>
+<style>
+/* ── 토큰 ─────────────────────────────────────────────── */
+:root{
+  --paper:#F3F5F2;
+  --surface:#FFFFFF;
+  --surface-2:#EAEEE9;
+  --ink:#121714;
+  --ink-2:#39433C;
+  --muted:#6B756E;
+  --faint:#9AA39C;
+  --rule:#D7DDD6;
+  --rule-strong:#BCC5BB;
+  --pass:#1E9E68;
+  --pass-soft:#E2F3EA;
+  --deny:#C24F2C;
+  --deny-soft:#FAE7E0;
+  --shadow:0 1px 2px rgba(18,23,20,.05), 0 12px 32px -18px rgba(18,23,20,.28);
+  --maxw:1180px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121714;
+    --surface:#19201C;
+    --surface-2:#212A24;
+    --ink:#EBF0EC;
+    --ink-2:#C3CCC5;
+    --muted:#8D978F;
+    --faint:#69736C;
+    --rule:#28312B;
+    --rule-strong:#3A453E;
+    --pass:#3FCE8C;
+    --pass-soft:#15291F;
+    --deny:#E87851;
+    --deny-soft:#2B1913;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 16px 40px -20px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121714;
+  --surface:#19201C;
+  --surface-2:#212A24;
+  --ink:#EBF0EC;
+  --ink-2:#C3CCC5;
+  --muted:#8D978F;
+  --faint:#69736C;
+  --rule:#28312B;
+  --rule-strong:#3A453E;
+  --pass:#3FCE8C;
+  --pass-soft:#15291F;
+  --deny:#E87851;
+  --deny-soft:#2B1913;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 16px 40px -20px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box;}
+html{
+  scroll-snap-type:y proximity;
+  scroll-behavior:smooth;
+  background:var(--paper);
+}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  font-weight:400;
+  -webkit-font-smoothing:antialiased;
+}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto; scroll-snap-type:none;} }
+
+/* ── 덱 스크롤러 ──────────────────────────────────────── */
+.deck{display:block; background:var(--paper); overflow-x:hidden;}
+
+.slide{
+  scroll-snap-align:start;
+  min-height:100vh;
+  min-height:100svh;
+  display:flex; flex-direction:column; justify-content:center;
+  padding:72px 64px 84px 116px;
+  position:relative;
+}
+.slide > .inner{width:100%; max-width:var(--maxw); margin:0 auto;}
+
+/* ── 좌측 레일 ────────────────────────────────────────── */
+.rail{
+  position:fixed; left:0; top:0; bottom:0; width:64px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:40;
+  border-right:1px solid var(--rule);
+  background:var(--paper);
+}
+.rail .seg-label{
+  font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.14em;
+  color:var(--faint); writing-mode:vertical-rl; text-orientation:mixed;
+  padding:6px 0; user-select:none;
+}
+.ticks{display:flex; flex-direction:column; gap:7px; align-items:center;}
+.grp-label{
+  font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:600;
+  letter-spacing:.1em; color:var(--faint); margin:14px 0 4px; user-select:none;
+}
+.grp-label.on{color:var(--pass);}
+.tick{
+  width:14px; height:2px; border:0; padding:0; border-radius:2px;
+  background:var(--rule-strong); cursor:pointer; transition:all .18s ease;
+}
+.tick:hover{background:var(--muted); width:20px;}
+.tick[aria-current="true"]{background:var(--pass); width:24px; height:3px;}
+.tick:focus-visible{outline:2px solid var(--pass); outline-offset:3px;}
+
+.counter{
+  position:fixed; right:26px; bottom:22px; z-index:40;
+  font-family:"IBM Plex Mono",monospace; font-size:12px;
+  color:var(--faint); letter-spacing:.06em;
+  font-variant-numeric:tabular-nums;
+  background:var(--paper); padding:4px 8px; border-radius:4px;
+}
+.hint{
+  position:fixed; left:80px; bottom:22px; z-index:40;
+  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--faint);
+  letter-spacing:.04em;
+}
+.hint kbd{
+  font-family:inherit; border:1px solid var(--rule-strong); border-radius:3px;
+  padding:1px 5px; color:var(--muted);
+}
+
+/* ── 타이포 ───────────────────────────────────────────── */
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:500;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--pass);
+  margin:0 0 20px;
+}
+.eyebrow.neutral{color:var(--faint);}
+.eyebrow.warn{color:var(--deny);}
+
+h1.title{
+  font-family:"Noto Serif KR","Apple SD Gothic Neo",serif; font-weight:900;
+  font-size:clamp(44px,6.2vw,86px); line-height:1.08; letter-spacing:-.025em;
+  margin:0; text-wrap:balance;
+}
+h2{
+  font-family:"Noto Serif KR","Apple SD Gothic Neo",serif; font-weight:700;
+  font-size:clamp(30px,3.5vw,48px); line-height:1.2; letter-spacing:-.02em;
+  margin:0 0 8px; text-wrap:balance;
+}
+.deck-h2-sub{
+  font-size:clamp(15px,1.35vw,19px); color:var(--muted); line-height:1.65;
+  margin:0 0 36px; max-width:62ch; font-weight:300;
+}
+p.lede{
+  font-size:clamp(17px,1.6vw,22px); line-height:1.7; color:var(--ink-2);
+  max-width:60ch; margin:0 0 20px; font-weight:300;
+}
+.mono{font-family:"IBM Plex Mono",monospace;}
+strong{font-weight:600; color:var(--ink);}
+em{font-style:normal; color:var(--pass); font-weight:500;}
+em.deny{color:var(--deny);}
+
+/* ── 표지 ─────────────────────────────────────────────── */
+.cover{
+  border-left:3px solid var(--pass); padding-left:34px;
+}
+.cover .meta{
+  display:flex; gap:28px; flex-wrap:wrap; margin-top:40px;
+  font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--muted);
+  letter-spacing:.03em;
+}
+.cover .meta span{display:flex; gap:8px; align-items:baseline;}
+.cover .meta b{color:var(--ink); font-weight:500;}
+
+/* ── 워크북 ───────────────────────────────────────────── */
+.wb{display:grid; gap:14px;}
+.wb.s3{grid-template-columns:repeat(3,1fr);}
+.wb-step{
+  background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+  padding:0; overflow:hidden; box-shadow:var(--shadow);
+  display:flex; flex-direction:column;
+}
+.wb-head{
+  display:flex; align-items:center; gap:12px;
+  padding:14px 20px; border-bottom:1px solid var(--rule); background:var(--surface-2);
+}
+.wb-head .no{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em;
+  color:var(--pass); font-weight:600; white-space:nowrap;
+}
+.wb-head .ti{font-size:15.5px; font-weight:600; letter-spacing:-.01em;}
+.wb-body{padding:18px 20px 20px; display:flex; flex-direction:column; gap:12px; flex:1;}
+.wb-cmd{
+  font-family:"IBM Plex Mono",monospace; font-size:13.5px; line-height:1.7;
+  background:var(--paper); border:1px solid var(--rule); border-radius:6px;
+  padding:12px 14px; overflow-x:auto; color:var(--ink-2);
+  white-space:pre-wrap; word-break:break-word;
+}
+.wb-cmd .p{color:var(--faint);}
+.wb-cmd .k{color:var(--pass); font-weight:500;}
+.wb-ok{
+  display:flex; gap:9px; align-items:flex-start;
+  font-size:13.5px; line-height:1.6; color:var(--ink-2); font-weight:300;
+}
+.wb-ok .m{color:var(--pass); font-weight:600; font-family:"IBM Plex Mono",monospace; flex-shrink:0;}
+.wb-ok.no .m{color:var(--deny);}
+.wb-ok b{font-weight:600; color:var(--ink);}
+.wb-note{font-size:12.5px; line-height:1.6; color:var(--faint); font-weight:300; margin-top:auto; padding-top:4px;}
+
+ul.check{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px;}
+ul.check li{
+  display:grid; grid-template-columns:22px 1fr; gap:12px; align-items:start;
+  font-size:15px; line-height:1.6; color:var(--ink-2); font-weight:300;
+}
+ul.check li::before{
+  content:""; width:15px; height:15px; margin-top:4px;
+  border:1.5px solid var(--rule-strong); border-radius:3px;
+}
+ul.check li b{font-weight:600; color:var(--ink);}
+ul.check li .mono{font-size:13.5px;}
+
+.divider .inner{display:grid; grid-template-columns:auto 1fr; gap:56px; align-items:center;}
+.div-no{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.18em;
+  color:var(--faint); text-align:right; line-height:1.4;
+}
+.div-no b{
+  display:block; font-family:"Noto Serif KR",serif; font-size:clamp(88px,11vw,160px);
+  font-weight:900; color:var(--pass); line-height:.9; letter-spacing:-.04em; margin-top:8px;
+}
+.div-body{border-left:1px solid var(--rule); padding-left:56px;}
+.div-body h1{margin-bottom:18px;}
+.div-runsheet{display:flex; flex-wrap:wrap; gap:8px; margin-top:30px;}
+.div-runsheet span{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted);
+  border:1px solid var(--rule); border-radius:20px; padding:6px 14px; background:var(--surface);
+}
+@media (max-width:900px){
+  .divider .inner{grid-template-columns:1fr; gap:20px;}
+  .div-no{text-align:left;}
+  .div-body{border-left:0; padding-left:0;}
+}
+
+/* ── 아젠다 ───────────────────────────────────────────── */
+.agenda{display:grid; grid-template-columns:1fr 1fr; gap:28px;}
+.agenda-card{
+  background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+  padding:30px 30px 34px; box-shadow:var(--shadow);
+  display:flex; flex-direction:column; gap:6px;
+}
+.agenda-card .no{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.14em;
+  color:var(--pass); margin-bottom:10px;
+}
+.agenda-card h3{
+  font-family:"Noto Serif KR",serif; font-weight:700; font-size:26px;
+  margin:0 0 4px; letter-spacing:-.01em;
+}
+.agenda-card .dur{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--faint);
+  margin-bottom:14px;
+}
+.agenda-card ul{margin:0; padding-left:17px; display:flex; flex-direction:column; gap:9px;}
+.agenda-card li{font-size:15px; line-height:1.55; color:var(--ink-2); font-weight:300;}
+.agenda-card li b{font-weight:500; color:var(--ink);}
+
+/* ── 코드 블록 ────────────────────────────────────────── */
+pre{
+  margin:0; background:var(--surface); border:1px solid var(--rule);
+  border-radius:8px; padding:22px 24px; overflow-x:auto;
+  font-family:"IBM Plex Mono",monospace; font-size:14.5px; line-height:1.85;
+  color:var(--ink-2); box-shadow:var(--shadow);
+}
+pre .c{color:var(--faint);}
+pre .k{color:var(--pass); font-weight:500;}
+pre .d{color:var(--deny); font-weight:500;}
+
+.term{
+  background:var(--surface); border:1px solid var(--rule);
+  border-left:3px solid var(--deny); border-radius:8px;
+  padding:0; overflow:hidden; box-shadow:var(--shadow);
+}
+.term-bar{
+  display:flex; align-items:center; gap:9px;
+  padding:9px 16px; border-bottom:1px solid var(--rule);
+  background:var(--surface-2);
+  font-family:"IBM Plex Mono",monospace; font-size:11px;
+  letter-spacing:.1em; color:var(--muted); text-transform:uppercase;
+}
+.term-bar .dot{width:7px; height:7px; border-radius:50%; background:var(--deny);}
+.term pre{border:0; border-radius:0; box-shadow:none; background:transparent; font-size:13.5px; line-height:1.8;}
+
+/* ── 목록/그리드 ──────────────────────────────────────── */
+.cols{display:grid; gap:26px;}
+.cols.c2{grid-template-columns:1fr 1fr;}
+.cols.c3{grid-template-columns:repeat(3,1fr);}
+.cols.split{grid-template-columns:1.05fr .95fr; align-items:start;}
+
+.card{
+  background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+  padding:24px 26px; box-shadow:var(--shadow);
+}
+.card h4{
+  margin:0 0 8px; font-size:17px; font-weight:600; letter-spacing:-.01em;
+}
+.card p{margin:0; font-size:14.5px; line-height:1.68; color:var(--muted); font-weight:300;}
+.card .tag{
+  display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11px;
+  letter-spacing:.08em; color:var(--pass); background:var(--pass-soft);
+  padding:3px 8px; border-radius:4px; margin-bottom:12px;
+}
+.card .tag.deny{color:var(--deny); background:var(--deny-soft);}
+
+ul.keys{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px;}
+ul.keys li{
+  display:grid; grid-template-columns:200px 1fr; gap:24px;
+  padding:15px 4px; border-top:1px solid var(--rule); align-items:baseline;
+}
+ul.keys li:last-child{border-bottom:1px solid var(--rule);}
+ul.keys .n{
+  font-family:"IBM Plex Mono",monospace; font-size:14px; font-weight:500; color:var(--ink);
+}
+ul.keys .d{font-size:14.5px; line-height:1.6; color:var(--muted); font-weight:300;}
+ul.keys .d b{color:var(--ink-2); font-weight:500;}
+
+/* ── 표 ───────────────────────────────────────────────── */
+.tablewrap{overflow-x:auto; border:1px solid var(--rule); border-radius:10px; background:var(--surface); box-shadow:var(--shadow);}
+table{border-collapse:collapse; width:100%; min-width:720px;}
+th,td{text-align:left; padding:13px 18px; border-bottom:1px solid var(--rule); vertical-align:top;}
+th{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--faint); font-weight:500;
+  background:var(--surface-2);
+}
+tr:last-child td{border-bottom:0;}
+td{font-size:14px; line-height:1.6; color:var(--ink-2); font-weight:300;}
+td.g{font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--ink); font-weight:400;}
+td .why{color:var(--faint); font-size:12.5px;}
+.pill{
+  display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:10.5px;
+  letter-spacing:.07em; padding:2px 7px; border-radius:4px; white-space:nowrap;
+}
+.pill.stop{background:var(--deny-soft); color:var(--deny);}
+.pill.warn{background:var(--surface-2); color:var(--muted);}
+.pill.inject{background:var(--pass-soft); color:var(--pass);}
+
+/* ── 숫자 ─────────────────────────────────────────────── */
+.stats{display:grid; grid-template-columns:repeat(4,1fr); gap:0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule);}
+.stat{padding:30px 26px 30px 0; border-right:1px solid var(--rule);}
+.stat:last-child{border-right:0;}
+.stat .v{
+  font-family:"IBM Plex Mono",monospace; font-size:clamp(34px,4.2vw,56px);
+  font-weight:500; letter-spacing:-.03em; color:var(--ink);
+  font-variant-numeric:tabular-nums; line-height:1;
+}
+.stat .v small{font-size:.42em; color:var(--muted); margin-left:5px; letter-spacing:0;}
+.stat .l{margin-top:12px; font-size:13.5px; color:var(--muted); line-height:1.5; font-weight:300;}
+
+/* ── 하네스 다이어그램 ────────────────────────────────── */
+.diagram{width:100%; margin:8px 0 0;}
+.diagram svg{width:100%; height:auto; display:block; overflow:visible;}
+.dg-spine{fill:var(--rule-strong);}
+.dg-card{fill:var(--surface); stroke:var(--rule);}
+.dg-lead{stroke:var(--rule-strong); stroke-width:1.5; stroke-dasharray:3 3;}
+.dg-clamp-pass{fill:none; stroke:var(--pass); stroke-width:3.5; stroke-linecap:round;}
+.dg-clamp-deny{fill:none; stroke:var(--deny); stroke-width:3.5; stroke-linecap:round;}
+.dg-name{font-family:"IBM Plex Mono",monospace; font-size:15px; font-weight:500; fill:var(--ink);}
+.dg-verb{font-family:"IBM Plex Sans KR",sans-serif; font-size:13px; font-weight:500;}
+.dg-verb.pass{fill:var(--pass);} .dg-verb.deny{fill:var(--deny);}
+.dg-file{font-family:"IBM Plex Mono",monospace; font-size:12px; fill:var(--muted);}
+.dg-end{font-family:"IBM Plex Sans KR",sans-serif; font-size:13px; fill:var(--faint);}
+
+/* ── 인용 ─────────────────────────────────────────────── */
+blockquote.pull{
+  margin:0; padding:0 0 0 30px; border-left:3px solid var(--deny);
+  font-family:"Noto Serif KR",serif; font-weight:600;
+  font-size:clamp(22px,2.6vw,34px); line-height:1.5; letter-spacing:-.015em;
+  color:var(--ink); max-width:26ch;
+}
+blockquote.pull cite{
+  display:block; margin-top:22px; font-family:"IBM Plex Mono",monospace;
+  font-size:12px; font-weight:400; font-style:normal; color:var(--faint);
+  letter-spacing:.04em; line-height:1.6;
+}
+
+/* ── 층위 스택 ────────────────────────────────────────── */
+.stack{display:flex; flex-direction:column; gap:9px;}
+.layer{
+  display:grid; grid-template-columns:190px 1fr auto; gap:22px; align-items:center;
+  background:var(--surface); border:1px solid var(--rule); border-radius:8px;
+  padding:17px 22px; box-shadow:var(--shadow);
+}
+.layer .who{font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--ink); font-weight:500;}
+.layer .what{font-size:14px; color:var(--muted); line-height:1.55; font-weight:300;}
+.layer .scope{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.08em;
+  color:var(--faint); white-space:nowrap;
+}
+.layer.mine{border-color:var(--pass); }
+.layer.mine .who{color:var(--pass);}
+
+/* ── 원칙 번호 ────────────────────────────────────────── */
+.principle-no{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.18em;
+  color:var(--faint); margin:0 0 18px;
+}
+.principle-no b{color:var(--pass); font-weight:500;}
+
+.flowline{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  font-family:"IBM Plex Mono",monospace; font-size:14px;
+  padding:20px 24px; background:var(--surface); border:1px solid var(--rule);
+  border-radius:8px; box-shadow:var(--shadow); color:var(--ink-2);
+}
+.flowline .step{white-space:nowrap;}
+.flowline .arw{color:var(--pass); font-weight:600;}
+
+.takeaway{
+  margin-top:26px; padding:18px 24px; border-radius:8px;
+  background:var(--pass-soft); border:1px solid var(--pass);
+  font-size:15px; line-height:1.65; color:var(--ink); font-weight:400;
+}
+.takeaway b{font-weight:600;}
+.takeaway.deny{background:var(--deny-soft); border-color:var(--deny);}
+
+.numlist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:18px;}
+.numlist li{display:grid; grid-template-columns:34px 1fr; gap:18px; align-items:start;}
+.numlist .i{
+  font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--pass);
+  padding-top:3px; font-weight:500;
+}
+.numlist .t{font-size:16px; line-height:1.68; color:var(--ink-2); font-weight:300;}
+.numlist .t b{font-weight:600; color:var(--ink);}
+
+/* ── 반응형 ───────────────────────────────────────────── */
+@media (max-width:900px){
+  .slide{padding:56px 28px 76px 88px;}
+  .agenda,.cols.c2,.cols.c3,.cols.split{grid-template-columns:1fr;}
+  .stats{grid-template-columns:1fr 1fr;}
+  .stat{border-right:0; padding-right:0;}
+  ul.keys li{grid-template-columns:1fr; gap:6px;}
+  .layer{grid-template-columns:1fr; gap:6px;}
+  .hint{display:none;}
+}
+</style>
+
+<nav class="rail" aria-label="슬라이드 이동">
+  <div class="seg-label">HARNESS · 2026</div>
+  <div class="ticks" id="ticks"></div>
+</nav>
+<div class="hint"><kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>space</kbd> 로 이동</div>
+<div class="counter" id="counter">01 / 28</div>
+
+<main class="deck" id="deck">
+
+<!-- 01 표지 -->
+<section class="slide"><div class="inner">
+  <div class="cover">
+    <p class="eyebrow">Claude Code · 팀 세션 · 30분</p>
+    <h1 class="title">하네스로<br>기획하기</h1>
+    <p class="lede" style="margin-top:28px;">터미널에 CLI 를 깔고, 규칙을 훅으로 굳히고,<br>그 위에서 기획서 360개를 만든 이야기.</p>
+    <div class="meta">
+      <span>발표 <b>David</b></span>
+      <span>세션 <b>2</b></span>
+      <span>대상 <b>제품·엔지니어링 팀</b></span>
+      <span class="mono">기획 문서 저장소 1곳 · 워크트리 25</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- 02 아젠다 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow neutral">오늘의 30분</p>
+  <h2>두 번에 나눠 봅니다</h2>
+  <p class="deck-h2-sub">앞 절반은 <strong>내 손에 도구를 쥐는 것</strong>, 뒤 절반은 <strong>그 도구로 실제 기획을 돌린 방법</strong>입니다. 앞을 건너뛰면 뒤가 마술처럼 보이고, 뒤를 건너뛰면 앞이 설치 매뉴얼로 끝납니다.</p>
+  <div class="agenda">
+    <div class="agenda-card">
+      <div class="no">SESSION 1</div>
+      <h3>깔고, 배선한다</h3>
+      <div class="dur">15분 · 슬라이드 3–16</div>
+      <ul>
+        <li><b>환경 세팅</b> — 설치부터 첫 세션까지</li>
+        <li><b>열쇠 다섯 개</b> — CLAUDE.md · 스킬 · 서브에이전트 · MCP · 훅</li>
+        <li><b>ECC</b> — 남이 만든 하네스를 얹기</li>
+        <li><b>하네스 엔지니어링</b> — 규칙을 «실행되는 것» 으로</li>
+      </ul>
+    </div>
+    <div class="agenda-card">
+      <div class="no">SESSION 2</div>
+      <h3>그 위에서 기획한다</h3>
+      <div class="dur">15분 · 슬라이드 17–24</div>
+      <ul>
+        <li><b>정본과 파장</b> — SSOT · Impact Matrix</li>
+        <li><b>병렬화</b> — 워크트리 25개 × 상시 세션</li>
+        <li><b>근거의 사슬</b> — 안 센 값을 적지 않는 법</li>
+        <li><b>사고에서 나온 규칙들</b></li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- S1 구분 표지 -->
+<section class="slide divider"><div class="inner">
+  <div class="div-no">SESSION<b>1</b>15분</div>
+  <div class="div-body">
+    <h1 class="title">깔고, 배선한다</h1>
+    <p class="lede"><strong>앞 네 장은 같이 따라 하는 워크북</strong>입니다. 깔고 나서, 규칙을 «지켜지길 바라는 문장» 에서 <strong>«검사하는 코드»</strong> 로 옮기는 데까지 갑니다.</p>
+    <div class="div-runsheet">
+      <span>워크북 — 준비물</span><span>워크북 — 설치</span><span>워크북 — 첫 5분</span><span>워크북 — 막혔을 때</span>
+      <span>왜 터미널인가</span><span>열쇠 5개</span><span>권한 모드</span><span>ECC</span>
+      <span>하네스 정의</span><span>훅 5지점</span><span>가드 표</span><span>실물 차단</span>
+      <span>가드 세우는 법</span><span>4층 구조</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- W0 시작 전 준비물 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">워크북 · 00 — 시작 전</p>
+  <h2>필요한 건 네 가지뿐입니다</h2>
+  <p class="deck-h2-sub">지금 노트북 여신 분은 같이 따라 하셔도 됩니다. <strong>먼저 확인부터</strong> 하고, 없는 게 있으면 오른쪽 칸대로 하시면 됩니다.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>있어야 할 것</th><th>확인 명령</th><th>이렇게 나오면 OK</th><th>없으면</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Node 18 이상</strong></td><td class="g">node -v</td><td class="g">v20.11.0</td><td class="why"><span class="mono">brew install node</span> · 또는 nvm 으로 20 설치</td></tr>
+        <tr><td><strong>git</strong></td><td class="g">git --version</td><td class="g">git version 2.39.x</td><td class="why"><span class="mono">xcode-select --install</span></td></tr>
+        <tr><td><strong>작업할 저장소</strong></td><td class="g">git status</td><td class="g">On branch main</td><td class="why"><span class="mono">mkdir demo &amp;&amp; cd demo &amp;&amp; git init</span></td></tr>
+        <tr><td><strong>Claude 계정</strong></td><td class="why">— (다음 장에서 로그인)</td><td class="why">구독 계정 또는 API 키</td><td class="why">둘 중 아무거나 하나면 됩니다</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="takeaway"><b>저장소 안에서 시작하는 게 중요합니다.</b> 아무 폴더에서나 띄우면 «작업 범위» 가 정해지지 않습니다. 연습용이면 빈 폴더에 <b>git init</b> 만 해 두셔도 충분합니다.</div>
+</div></section>
+
+<!-- W1 설치 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">워크북 · 01 — 설치</p>
+  <h2>세 스텝이면 끝납니다</h2>
+  <p class="deck-h2-sub">각 칸 아래 <em>✓ 줄</em>이 «이렇게 나오면 성공» 입니다. 거기까지 확인하고 다음으로 넘어가시면 됩니다.</p>
+  <div class="wb s3">
+    <div class="wb-step">
+      <div class="wb-head"><span class="no">STEP 1</span><span class="ti">설치</span></div>
+      <div class="wb-body">
+        <div class="wb-cmd"><span class="p">$</span> npm install -g <span class="k">@anthropic-ai/claude-code</span></div>
+        <div class="wb-ok"><span class="m">✓</span><span>다 끝나면 <span class="mono">claude --version</span> 을 쳐서 <b>버전이 찍히면</b> 성공입니다.</span></div>
+        <div class="wb-note">1~2분 걸립니다. 돌아가는 동안 다음 얘기를 이어 가겠습니다.</div>
+      </div>
+    </div>
+    <div class="wb-step">
+      <div class="wb-head"><span class="no">STEP 2</span><span class="ti">저장소에서 실행 · 로그인</span></div>
+      <div class="wb-body">
+        <div class="wb-cmd"><span class="p">$</span> cd ~/Projects/my-repo
+<span class="p">$</span> <span class="k">claude</span></div>
+        <div class="wb-ok"><span class="m">✓</span><span>브라우저가 열리면 승인하고 <b>터미널로 돌아옵니다.</b> 프롬프트가 뜨면 성공입니다.</span></div>
+        <div class="wb-note">브라우저가 안 열리면 터미널에 찍힌 URL 을 직접 복사해서 여시면 됩니다.</div>
+      </div>
+    </div>
+    <div class="wb-step">
+      <div class="wb-head"><span class="no">STEP 3</span><span class="ti">진짜 도는지 확인</span></div>
+      <div class="wb-body">
+        <div class="wb-cmd"><span class="p">&gt;</span> 이 저장소가 무슨 프로젝트인지
+  <span class="k">한 줄로 알려 줘</span></div>
+        <div class="wb-ok"><span class="m">✓</span><span>파일을 몇 개 읽고 <b>한 줄로 답하면</b> 설치 끝입니다.</span></div>
+        <div class="wb-note">읽기만 하는 요청이라 아무것도 안 바뀝니다. 첫 확인용으로 안전합니다.</div>
+      </div>
+    </div>
+  </div>
+  <div class="takeaway"><b>여기까지가 «설치» 입니다.</b> 지금부터 나오는 건 전부 «설정» 이고, 안 해도 돌아갑니다 — 다만 <b>다음 장 네 가지는 5분이면 되고 이후가 크게 달라집니다.</b></div>
+</div></section>
+
+<!-- W2 첫 5분 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">워크북 · 02 — 첫 5분</p>
+  <h2>세션 안에서 이 네 가지</h2>
+  <p class="deck-h2-sub">전부 슬래시 명령입니다. 프롬프트에 <span class="mono">/</span> 만 쳐도 목록이 뜹니다.</p>
+  <div class="cols split">
+    <div>
+      <div class="wb" style="gap:12px;">
+        <div class="wb-step">
+          <div class="wb-head"><span class="no">1</span><span class="ti">/init — 상시 지시문 만들기</span></div>
+          <div class="wb-body">
+            <div class="wb-ok"><span class="m">✓</span><span>저장소 루트에 <b>CLAUDE.md</b> 가 생깁니다. 열어서 <b>틀린 문장 하나를 고쳐</b> 두세요.</span></div>
+            <div class="wb-note">이 파일은 앞으로 <b>매 세션 자동으로 읽힙니다.</b> 오늘 하는 것 중 가장 오래 남는 일입니다.</div>
+          </div>
+        </div>
+        <div class="wb-step">
+          <div class="wb-head"><span class="no">2</span><span class="ti">/model — 모델 고르기</span></div>
+          <div class="wb-body">
+            <div class="wb-ok"><span class="m">✓</span><span>긴 조사·설계는 무거운 모델, 반복 편집은 가벼운 모델.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="wb" style="gap:12px;">
+        <div class="wb-step">
+          <div class="wb-head"><span class="no">3</span><span class="ti">/permissions — 확인 범위 정하기</span></div>
+          <div class="wb-body">
+            <div class="wb-ok"><span class="m">✓</span><span>오늘은 <b>기본값 그대로</b> 두세요. 왜 그런지는 세 장 뒤에 나옵니다.</span></div>
+            <div class="wb-note">가드 없이 확인부터 끄면 무방비가 됩니다. 순서가 있습니다.</div>
+          </div>
+        </div>
+        <div class="wb-step">
+          <div class="wb-head"><span class="no">4</span><span class="ti">첫 실전 요청 하나</span></div>
+          <div class="wb-body">
+            <div class="wb-cmd"><span class="p">&gt;</span> README 에 <span class="k">오타 있으면 찾아서 고쳐 줘</span></div>
+            <div class="wb-ok"><span class="m">✓</span><span>고칠 때 <b>확인을 물어보는지</b> 보세요. 그게 권한 모드가 하는 일입니다.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- W3 막혔을 때 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow warn">워크북 · 03 — 막혔을 때 · 완료 판정</p>
+  <h2>여기서 자주 막힙니다</h2>
+  <div class="cols split">
+    <div>
+      <ul class="keys">
+        <li><span class="n">npm ERR! EACCES</span><span class="d">전역 설치 권한 문제입니다. <b><span class="mono">sudo</span> 를 붙이지 마시고</b> nvm 으로 Node 를 다시 까는 게 안전합니다.</span></li>
+        <li><span class="n">node -v 가 16 이하</span><span class="d"><span class="mono">nvm install 20 &amp;&amp; nvm use 20</span>. 설치는 되는데 실행할 때 이상하게 죽으면 대개 이겁니다.</span></li>
+        <li><span class="n">브라우저가 안 열림</span><span class="d">터미널에 찍힌 <b>URL 을 직접 복사</b>해서 여시면 됩니다. 원격 접속 중이면 늘 이렇습니다.</span></li>
+        <li><span class="n">회사 게이트웨이</span><span class="d"><span class="mono">ANTHROPIC_BASE_URL</span> 과 토큰을 환경변수로 지정합니다. 사내 프록시를 쓰는 경우입니다.</span></li>
+        <li><span class="n">한글이 깨짐</span><span class="d">터미널 인코딩을 UTF-8 로. 폰트도 한글 되는 걸로 바꾸십시오.</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--pass);">
+        <span class="tag">오늘의 완료 판정</span>
+        <h4>다섯 개가 다 체크되면 됩니다</h4>
+        <ul class="check" style="margin-top:16px;">
+          <li><span class="mono">claude --version</span> 이 버전을 출력한다</li>
+          <li>저장소 안에서 <span class="mono">claude</span> 가 뜨고 로그인이 끝났다</li>
+          <li>읽기 요청 하나에 <b>답이 왔다</b></li>
+          <li><b>CLAUDE.md</b> 가 생겼고, 한 줄 고쳐서 커밋했다</li>
+          <li>편집 요청 때 <b>확인을 물어보는 걸</b> 봤다</li>
+        </ul>
+      </div>
+      <div class="takeaway" style="margin-top:16px;">여기까지 되면 <b>오늘 실습은 끝</b>입니다. 남은 시간은 «그래서 이걸로 뭘 하느냐» 입니다.</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- 03 S1 오프너 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 01</p>
+  <h2>왜 터미널인가</h2>
+  <p class="deck-h2-sub">웹·데스크톱 앱도 훌륭합니다. CLI 를 쓰는 이유는 «성능» 이 아니라 <strong>접근권</strong>입니다.</p>
+  <div class="cols c3">
+    <div class="card">
+      <span class="tag">파일</span>
+      <h4>내 디스크를 그대로 본다</h4>
+      <p>업로드가 없습니다. 저장소 전체가 작업 대상이고, 고친 결과가 곧 워킹 트리에 남습니다.</p>
+    </div>
+    <div class="card">
+      <span class="tag">git</span>
+      <h4>브랜치·워크트리 위에서 돈다</h4>
+      <p>커밋·병합·푸시가 대화 안에 들어옵니다. 되돌리기가 «다시 물어보기» 가 아니라 <span class="mono">git</span> 입니다.</p>
+    </div>
+    <div class="card">
+      <span class="tag">훅</span>
+      <h4>내가 만든 코드가 끼어든다</h4>
+      <p>오늘의 핵심입니다. 도구 호출 전후에 <strong>내 스크립트</strong>를 걸 수 있는 건 CLI 뿐입니다.</p>
+    </div>
+  </div>
+  <div class="takeaway">CLI 를 고르는 순간 얻는 것은 속도가 아니라 <b>«규칙을 강제할 자리»</b> 입니다. 세션 1의 나머지는 전부 이 자리를 어떻게 쓰느냐입니다.</div>
+</div></section>
+
+<!-- 06 열쇠 다섯 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 04 — 부품 목록</p>
+  <h2>열쇠는 다섯 개뿐입니다</h2>
+  <p class="deck-h2-sub">Claude Code 를 «확장» 하는 방법은 이게 전부입니다. 뒤에 나올 하네스는 이 다섯을 조합한 것입니다.</p>
+  <ul class="keys">
+    <li><span class="n">CLAUDE.md</span><span class="d"><b>항상 읽히는 지시문.</b> 전역(<span class="mono">~/.claude</span>) → 저장소 → 하위 폴더 순으로 겹칩니다. 규칙의 «말» 이 사는 곳.</span></li>
+    <li><span class="n">스킬 / 슬래시 명령</span><span class="d"><b>부를 때만 읽히는 절차서.</b> 상시 지시문에 다 넣으면 컨텍스트가 터지므로, 무거운 절차는 스킬로 빼고 이름으로 부릅니다.</span></li>
+    <li><span class="n">서브에이전트</span><span class="d"><b>별도 컨텍스트를 가진 일꾼.</b> 조사·검증처럼 «읽은 것을 다 데려올 필요 없는» 일을 떼어 보냅니다. 결론만 돌아옵니다.</span></li>
+    <li><span class="n">MCP</span><span class="d"><b>바깥 세계와의 배선.</b> 이슈 트래커·드라이브·브라우저·캘린더. 티켓 읽기와 코멘트 달기에 매일 씁니다.</span></li>
+    <li><span class="n">훅 (hooks)</span><span class="d"><b>내 코드가 끼어드는 자리.</b> 세션 시작·도구 호출 전후·응답 종료에 스크립트를 겁니다. 유일하게 <em>강제력</em>이 있는 부품입니다.</span></li>
+  </ul>
+</div></section>
+
+<!-- 07 권한 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 05 — 환경 세팅</p>
+  <h2>권한 모드와 안전선</h2>
+  <p class="deck-h2-sub">«매번 확인» 은 안전하지만 느리고, 느리면 사람이 규칙을 끕니다. 그래서 <strong>확인을 줄이되 가드를 늘리는</strong> 쪽으로 갑니다.</p>
+  <div class="cols c2">
+    <div>
+      <ul class="keys">
+        <li><span class="n">default</span><span class="d">쓰기·명령마다 확인. 처음 며칠은 이걸로 감을 잡습니다.</span></li>
+        <li><span class="n">acceptEdits</span><span class="d">파일 편집은 자동 승인, 명령은 확인. 실무 기본값으로 좋습니다.</span></li>
+        <li><span class="n">plan</span><span class="d">읽기만 하고 계획을 세웁니다. 큰 작업 착수 전에.</span></li>
+        <li><span class="n">bypassPermissions</span><span class="d">확인 없이 진행. <em class="deny">가드를 갖춘 저장소에서만</em> 씁니다.</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--deny);">
+        <span class="tag deny">주의</span>
+        <h4>bypass 는 «가드가 있을 때» 의 선택지입니다</h4>
+        <p style="margin-bottom:14px;">확인 프롬프트를 없앤다는 건 <strong>판단을 사람에서 코드로 옮긴다</strong>는 뜻입니다. 옮길 코드가 없으면 그냥 무방비입니다.</p>
+        <p>우리 저장소가 bypass 로 도는 이유는 훅 6종 + pre-commit 8종이 그 판단을 대신하기 때문입니다. 순서를 거꾸로 하지 마세요.</p>
+      </div>
+      <div class="takeaway deny" style="margin-top:18px;">덧붙여, <b>기본 확인을 줄일수록 «무엇을 읽히는가» 가 위험해집니다.</b> 외부 저장소·이슈 본문·웹 페이지는 전부 프롬프트 주입 경로입니다.</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- 08 ECC -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 06 — ECC</p>
+  <h2>ECC — 남이 만들어 둔 하네스</h2>
+  <p class="deck-h2-sub"><strong>Everything Claude Code</strong>. 에이전트·스킬·규칙·훅을 한 벌로 묶은 오픈소스 플러그인입니다. 우리는 이걸 <strong>바닥층</strong>으로 깔고, 그 위에 저장소 전용 규칙을 얹었습니다.</p>
+  <div class="cols split">
+    <div>
+<pre><span class="c"># 마켓플레이스 등록</span>
+/plugin marketplace add <span class="k">affaan-m/everything-claude-code</span>
+
+<span class="c"># 설치 (프로필 선택 가능)</span>
+/plugin install <span class="k">ecc@ecc</span>
+
+<span class="c"># 무엇이 들어왔는지 보기</span>
+/agents      <span class="c">← 서브에이전트 목록</span>
+/plugin      <span class="c">← 설치 상태</span></pre>
+      <div class="takeaway" style="margin-top:20px;">이 기기에는 <b>v1.10.0 · full 프로필</b>로 설치돼 있습니다. 매니페스트 기준 에이전트 38 · 스킬 156 · 레거시 명령 72.</div>
+    </div>
+    <div>
+      <ul class="keys">
+        <li><span class="n">agents/</span><span class="d">planner · architect · code-reviewer · security-reviewer · 언어별 리뷰어. <b>«코드 쓴 직후엔 리뷰어를 부른다»</b> 같은 습관이 규칙으로 들어옵니다.</span></li>
+        <li><span class="n">rules/</span><span class="d">common + 언어별. 테스트 80% · 불변성 · 파일 800줄 상한 같은 <b>팀 표준</b>이 항상 읽힙니다.</span></li>
+        <li><span class="n">skills/</span><span class="d">부를 때만 읽히는 절차서 묶음.</span></li>
+        <li><span class="n">hooks/</span><span class="d">TDD·보안 스캔용 기본 훅. 여기서부터 <em>우리가 직접 씁니다.</em></span></li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- 09 하네스 정의 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 07 — 하네스 엔지니어링</p>
+  <h2>하네스란 무엇인가</h2>
+  <div class="cols split" style="align-items:center;">
+    <div>
+      <p class="lede"><strong>모델은 부품입니다.</strong> 하네스는 그 부품을 붙잡는 배선 — 무엇을 읽히고, 무엇을 못 하게 하고, 무엇을 되돌릴지 정하는 층입니다.</p>
+      <p class="lede">프롬프트 엔지니어링은 <em>더 잘 말하는 법</em>을 다룹니다. 하네스 엔지니어링은 <em>말이 지켜지게 만드는 법</em>을 다룹니다. 같은 모델로 결과가 갈리는 지점은 대부분 후자입니다.</p>
+      <div class="takeaway">한 문장으로: <b>«규칙을 프롬프트에 적는 대신, 검사하는 코드로 옮긴다.»</b></div>
+    </div>
+    <div>
+      <blockquote class="pull">규칙이 프롬프트 텍스트로만 존재하면 세션마다 지켜지기도 하고 안 지켜지기도 한다.
+        <cite>— .claude/hooks/routing-guard.py 머리 주석<br>규칙은 2026-08-17 문서에 들어갔지만, 검사하는 훅은 없었다.</cite>
+      </blockquote>
+    </div>
+  </div>
+</div></section>
+
+<!-- 10 다섯 겹 다이어그램 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 08 — 하네스 엔지니어링</p>
+  <h2>끼어들 수 있는 자리는 다섯 곳</h2>
+  <p class="deck-h2-sub">한 «턴» 이 흘러가는 동안 훅이 걸리는 지점입니다. <em>초록</em>은 무언가를 넣는 자리, <em class="deny">주황</em>은 막거나 되돌리는 자리입니다.</p>
+  <div class="diagram">
+    <svg viewBox="0 0 1000 330" role="img" aria-label="한 턴의 흐름 위에 다섯 개의 훅 지점이 물려 있는 다이어그램">
+      <!-- spine -->
+      <rect class="dg-spine" x="40" y="176" width="920" height="10" rx="5"></rect>
+      <text class="dg-end" x="40" y="212">세션 시작</text>
+      <text class="dg-end" x="960" y="212" text-anchor="end">응답 완료</text>
+
+      <!-- 1 SessionStart -->
+      <g>
+        <rect class="dg-card" x="20" y="44" width="176" height="76" rx="7"></rect>
+        <text class="dg-name" x="38" y="74">SessionStart</text>
+        <text class="dg-verb pass" x="38" y="99">규칙을 주입한다</text>
+        <line class="dg-lead" x1="108" y1="120" x2="108" y2="164"></line>
+        <path class="dg-clamp-pass" d="M96 162 h24 M96 200 h24 M120 162 v38"></path>
+        <text class="dg-file" x="108" y="238" text-anchor="middle">ds-session.py</text>
+        <text class="dg-file" x="108" y="258" text-anchor="middle">honorific-guard</text>
+      </g>
+
+      <!-- 2 PreToolUse -->
+      <g>
+        <rect class="dg-card" x="222" y="44" width="176" height="76" rx="7"></rect>
+        <text class="dg-name" x="240" y="74">PreToolUse</text>
+        <text class="dg-verb deny" x="240" y="99">도구를 차단한다</text>
+        <line class="dg-lead" x1="310" y1="120" x2="310" y2="164"></line>
+        <path class="dg-clamp-deny" d="M298 162 h24 M298 200 h24 M322 162 v38"></path>
+        <text class="dg-file" x="310" y="238" text-anchor="middle">routing-guard</text>
+        <text class="dg-file" x="310" y="258" text-anchor="middle">ds-guard · push-guard</text>
+      </g>
+
+      <!-- 3 PostToolUse -->
+      <g>
+        <rect class="dg-card" x="424" y="44" width="176" height="76" rx="7"></rect>
+        <text class="dg-name" x="442" y="74">PostToolUse</text>
+        <text class="dg-verb pass" x="442" y="99">상태를 알린다</text>
+        <line class="dg-lead" x1="512" y1="120" x2="512" y2="164"></line>
+        <path class="dg-clamp-pass" d="M500 162 h24 M500 200 h24 M524 162 v38"></path>
+        <text class="dg-file" x="512" y="238" text-anchor="middle">ctx-relay-guard</text>
+        <text class="dg-file" x="512" y="258" text-anchor="middle">(컨텍스트 50% 경고)</text>
+      </g>
+
+      <!-- 4 SubagentStop -->
+      <g>
+        <rect class="dg-card" x="626" y="44" width="176" height="76" rx="7"></rect>
+        <text class="dg-name" x="644" y="74">SubagentStop</text>
+        <text class="dg-verb deny" x="644" y="99">보고를 반려한다</text>
+        <line class="dg-lead" x1="714" y1="120" x2="714" y2="164"></line>
+        <path class="dg-clamp-deny" d="M702 162 h24 M702 200 h24 M726 162 v38"></path>
+        <text class="dg-file" x="714" y="238" text-anchor="middle">honorific-guard</text>
+        <text class="dg-file" x="714" y="258" text-anchor="middle">(서브에이전트 말투)</text>
+      </g>
+
+      <!-- 5 Stop -->
+      <g>
+        <rect class="dg-card" x="828" y="44" width="152" height="76" rx="7"></rect>
+        <text class="dg-name" x="846" y="74">Stop</text>
+        <text class="dg-verb deny" x="846" y="99">응답을 반려한다</text>
+        <line class="dg-lead" x1="904" y1="120" x2="904" y2="164"></line>
+        <path class="dg-clamp-deny" d="M892 162 h24 M892 200 h24 M916 162 v38"></path>
+        <text class="dg-file" x="904" y="238" text-anchor="middle">honorific-guard</text>
+        <text class="dg-file" x="904" y="258" text-anchor="middle">ctx-relay-guard</text>
+      </g>
+    </svg>
+  </div>
+  <div class="takeaway" style="margin-top:6px;"><b>Stop 이 가장 강한 자리입니다.</b> 응답을 반려하면 그 턴이 끝나지 않습니다 — 「다시 쓰라」가 요청이 아니라 <b>조건</b>이 됩니다.</div>
+</div></section>
+
+<!-- 11 우리 훅 표 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 09 — 하네스 엔지니어링</p>
+  <h2>가드는 전부 «사고» 에서 나왔습니다</h2>
+  <p class="deck-h2-sub">하나도 미리 설계한 게 없습니다. 전부 <strong>한 번 데인 뒤</strong> 세운 것이고, 그래서 각각이 특정 사고를 가리킵니다.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>가드</th><th>거는 곳</th><th>무엇을 막나</th><th>어느 사고에서</th></tr></thead>
+      <tbody>
+        <tr><td class="g">routing-guard</td><td><span class="pill stop">PreToolUse</span></td><td>메인 체크아웃에서 남의 담당 기획 파일 수정 · <span class="mono">EnterWorktree</span></td><td class="why">두 세션이 같은 파일을 동시 편집해 분리 커밋이 불가능해짐</td></tr>
+        <tr><td class="g">ds-guard / ds-session</td><td><span class="pill stop">PreToolUse</span> <span class="pill inject">SessionStart</span></td><td>디자인 토큰 문서의 실측 근거 없이 화면을 그리는 것</td><td class="why">새 탭을 통째로 만들었는데 가드가 한 번도 울지 않음</td></tr>
+        <tr><td class="g">honorific-guard</td><td><span class="pill stop">Stop</span> <span class="pill stop">SubagentStop</span> +3</td><td>반말 응답 — 찾으면 <strong>그 턴을 끝내지 않음</strong></td><td class="why">말투 규칙이 문서에만 있던 시절, 세션마다 달랐음</td></tr>
+        <tr><td class="g">ctx-relay-guard</td><td><span class="pill warn">PostToolUse</span> <span class="pill stop">Stop</span></td><td>컨텍스트 50% 초과 후 인계 카드 없이 종료</td><td class="why">자동 압축이 「지금 하던 일」을 요약된 기억으로 바꿔 놓음</td></tr>
+        <tr><td class="g">shared-index-guard<br>main-index-guard</td><td><span class="pill stop">PreToolUse</span> <span class="pill stop">pre-commit</span></td><td>남의 staged 파일 · 남의 <span class="mono">MERGE_HEAD</span> 위 커밋</td><td class="why">메인 체크아웃을 여러 세션이 공유하면서 남의 변경이 딸려 옴</td></tr>
+        <tr><td class="g">ds-newscreen-guard</td><td><span class="pill stop">pre-commit</span></td><td>실측 근거 인용 없는 <strong>새 화면·새 탭</strong> 커밋</td><td class="why">신규 «파일» 만 보다가 기존 파일 안의 새 화면을 놓침</td></tr>
+        <tr><td class="g">stale-artifact-guard</td><td><span class="pill stop">pre-push</span></td><td>재생성 안 한 낡은 빌드 산출물 푸시</td><td class="why">68커밋 뒤처진 트리에서 39커밋 분이 사라질 뻔함</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div></section>
+
+<!-- 12 실물 deny -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow warn">Session 1 · 10 — 하네스 엔지니어링</p>
+  <h2>차단은 이렇게 생겼습니다</h2>
+  <p class="deck-h2-sub">메인 체크아웃에서 남의 담당 기획 파일을 고치려 하면 <strong>도구 호출 자체가 거부</strong>됩니다. 중요한 건 «막는다» 가 아니라, <strong>대신 무엇을 하라고 알려 준다</strong>는 점입니다.</p>
+  <div class="term">
+    <div class="term-bar"><span class="dot"></span> PreToolUse · routing-guard.py · permissionDecision: deny</div>
+<pre>메인 체크아웃에서 기획 파일을 고치려 했다 — CLAUDE.md STEP 0 위반.
+
+  대상   : docs/specs/checkout/spec-checkout.md
+  담당   : checkout  (결제 영역)
+  워크트리: ~/worktrees/checkout
+
+이 파일에는 그 워크트리의 담당 세션이 붙어 있다. 메인에서 고치면
+동시편집이 되어 분리 커밋이 불가능해진다.</pre>
+  </div>
+  <div class="takeaway"><b>좋은 가드는 «거부» 가 아니라 «전환» 입니다.</b> 담당 slug·워크트리 경로·다음 절차까지 붙여 줘야 우회하지 않습니다. 방해물이 되는 순간 사람은 훅을 끕니다.</div>
+</div></section>
+
+<!-- 13 가드 세우는 규칙 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 11 — 하네스 엔지니어링</p>
+  <h2>가드를 세울 때의 세 가지</h2>
+  <p class="deck-h2-sub">여기서 제일 많이 데였습니다. 가드 자체가 버그를 만듭니다.</p>
+  <ol class="numlist">
+    <li><span class="i">01</span><span class="t"><b>정말 깨졌는지 «먼저» 확인한다.</b> 순서를 바꾸면 — 게이트를 먼저 돌리면 — 깨지지도 않은 것을 보고 「게이트가 못 잡는다」로 읽습니다. 실제로 그럴 뻔했습니다.</span></li>
+    <li><span class="i">02</span><span class="t"><b>정탐과 오탐을 둘 다 본다.</b> 오탐이 정탐 실패보다 비쌉니다. 막힌 사람이 게이트를 꺼 버리면 정탐도 같이 사라집니다. <em class="deny">오탐 하나가 세션 하나의 하루치 작업을 인질로 잡은 적이 있습니다.</em></span></li>
+    <li><span class="i">03</span><span class="t"><b>게이트가 «무엇을 볼 수 없는지» 도 적는다.</b> 셸 동기 검사가 「빌더 출력 == 셸」만 보느라, <b>둘이 똑같이 깨진 경우</b>를 통과시켰습니다. 그 자리는 검사 목록에 아예 없었습니다.</span></li>
+  </ol>
+  <div class="takeaway deny"><b>가드도 낡습니다.</b> 워크트리에서 훅을 돌리면 «그 트리의 훅 사본» 이 돕니다. 19커밋 뒤처진 검사기가 정상 커밋을 거부했고, 108커밋 뒤처진 설정으로 리허설해 틀린 결론을 냈습니다 — <b>재는 자[尺]가 낡은 경우</b>라 「세는 법」 규칙으로는 안 걸립니다.</div>
+</div></section>
+
+<!-- 14 층위 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 1 · 12 — 하네스 엔지니어링</p>
+  <h2>규칙은 네 층으로 쌓입니다</h2>
+  <p class="deck-h2-sub">아래로 갈수록 <strong>구체적이고, 강제력이 세고, 이깁니다.</strong> 충돌하면 아래층이 위층을 덮어씁니다.</p>
+  <div class="stack">
+    <div class="layer">
+      <span class="who">ECC 플러그인</span>
+      <span class="what">에이전트·스킬·언어별 규칙. 남이 검증한 기본기 — TDD · 코드 리뷰 · 보안 체크리스트</span>
+      <span class="scope">~/.claude · 전역</span>
+    </div>
+    <div class="layer">
+      <span class="who">전역 CLAUDE.md</span>
+      <span class="what">내 개인 작업 방식. 말투 규칙 · 노션 미사용 · 프로젝트 경로 · 컨텍스트 50% 인계</span>
+      <span class="scope">~/.claude · 전역</span>
+    </div>
+    <div class="layer mine">
+      <span class="who">저장소 CLAUDE.md</span>
+      <span class="what">이 저장소에서만 참인 것. STEP 0 라우팅 · Impact Matrix 절차 · 절대규칙 10개 · <strong>사고 기록과 그 근거</strong></span>
+      <span class="scope">저장소 · 커밋됨</span>
+    </div>
+    <div class="layer mine">
+      <span class="who">.claude/hooks/ + lefthook</span>
+      <span class="what">위 세 층을 <strong>실제로 검사하는 코드.</strong> 훅 6종 · pre-commit 8종 · 각각 테스트 파일 동반</span>
+      <span class="scope">저장소 · 실행됨</span>
+    </div>
+  </div>
+  <div class="takeaway"><b>「저장소에 커밋된 규칙이 메모리를 이긴다.」</b> 실제로 두 세션이 같은 메모리의 서로 다른 시점 사본으로 정반대로 알았던 적이 있어, 그 뒤로 결정은 전부 커밋합니다.</div>
+</div></section>
+
+<!-- 15 S1 정리 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow neutral">Session 1 · 정리</p>
+  <h2>세션 1을 한 장으로</h2>
+  <div class="cols c3">
+    <div class="card"><span class="tag">깐다</span><h4>3줄이면 끝</h4><p><span class="mono">npm i -g @anthropic-ai/claude-code</span> → 저장소에서 <span class="mono">claude</span> → <span class="mono">/init</span>.</p></div>
+    <div class="card"><span class="tag">얹는다</span><h4>ECC 로 바닥을 깐다</h4><p>에이전트·규칙·스킬을 처음부터 쓰지 말고 검증된 한 벌로 시작합니다.</p></div>
+    <div class="card"><span class="tag">배선한다</span><h4>규칙을 훅으로 옮긴다</h4><p>문서에만 있는 규칙은 지켜지기도 하고 안 지켜지기도 합니다. 검사하는 코드가 있어야 규칙입니다.</p></div>
+  </div>
+  <div class="takeaway" style="margin-top:30px;">여기까지가 <b>설치</b>입니다. 세션 2는 <b>이 하네스 위에서 기획서 360개를 실제로 어떻게 굴렸는지</b>입니다.</div>
+</div></section>
+
+<!-- S2 구분 표지 -->
+<section class="slide divider"><div class="inner">
+  <div class="div-no">SESSION<b>2</b>15분</div>
+  <div class="div-body">
+    <h1 class="title">그 위에서<br>기획한다</h1>
+    <p class="lede">앞에서 만든 하네스 위에서 실제로 굴린 <strong>여섯 가지 원칙</strong>. 전부 한 번씩 데이고 나서 생긴 것들입니다.</p>
+    <div class="div-runsheet">
+      <span>규모</span><span>01 정본</span><span>02 파장</span><span>03 병렬화</span>
+      <span>04 인계</span><span>05 근거의 사슬</span><span>06 컨텍스트 50%</span>
+      <span>통합</span><span>다음 걸음</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- 16 S2 오프너 숫자 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 2 · 01 — 기획 방법론</p>
+  <h2>먼저 규모부터</h2>
+  <p class="deck-h2-sub">방법론 이야기 전에, 이 방식으로 나온 결과의 크기입니다. 사람은 한 명입니다.</p>
+  <div class="stats">
+    <div class="stat"><div class="v">104</div><div class="l">화면 기획 JSX<br><span class="mono">docs/**/*.jsx</span></div></div>
+    <div class="stat"><div class="v">256</div><div class="l">스펙·정책·아키텍처 문서<br><span class="mono">spec-* · *.policy.md · arch-*</span></div></div>
+    <div class="stat"><div class="v">25</div><div class="l">기획 영역 × 워크트리<br><span class="mono">scripts/routing.json</span></div></div>
+    <div class="stat"><div class="v">1,084<small>/3개월</small></div><div class="l">커밋 (전체 1,206)<br><span class="mono">git log --since=&quot;3 months ago&quot;</span></div></div>
+  </div>
+  <div class="takeaway" style="margin-top:30px;">숫자 자체가 요점은 아닙니다. 요점은 <b>이 규모가 되면 «기억으로 일하기» 가 반드시 깨진다</b>는 것이고, 뒤의 여섯 원칙은 전부 그 깨짐을 막는 장치입니다.</div>
+</div></section>
+
+<!-- 17 원칙 1 SSOT -->
+<section class="slide"><div class="inner">
+  <p class="principle-no">원칙 <b>01</b> / 06</p>
+  <h2>정본을 먼저 정한다</h2>
+  <p class="deck-h2-sub">같은 사실이 두 곳에 적히는 순간, 둘은 반드시 갈라집니다. 그래서 <strong>어느 파일이 정답인지</strong>부터 못 박습니다.</p>
+  <div class="cols split">
+    <div>
+      <ul class="keys">
+        <li><span class="n">코어 데이터 모델</span><span class="d">엔티티·필드의 정본은 <b>arch-core-data-model.md</b> 한 곳. 4곳에 흩어져 있던 걸 병합해 만들었습니다.</span></li>
+        <li><span class="n">내비게이션</span><span class="d">좌측 메뉴의 권위 정의는 <b>내비게이션 정책 문서 §1</b> 한 곳. 화면 코드 5개의 <span class="mono">NAV_ITEMS</span> 는 전부 사본입니다.</span></li>
+        <li><span class="n">디자인 토큰</span><span class="d">값의 정본은 <b>scripts/tokens.py</b> 한 곳. 화면 코드는 주입된 전역 객체로 받아 씁니다 — hex 를 직접 쓰지 않습니다.</span></li>
+        <li><span class="n">담당 라우팅</span><span class="d">slug ↔ 폴더 표의 정본은 <b>routing.json</b>. 훅도 티켓 디스패처도 이 파일만 읽습니다.</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="card">
+        <span class="tag">왜 이게 하네스인가</span>
+        <h4>정본이 정해지면 가드를 걸 수 있습니다</h4>
+        <p style="margin-bottom:14px;">「토큰 값은 여기서만 고친다」는 <strong>말</strong>입니다. 그런데 정본이 한 곳이면, <span class="mono">ds-token-guard</span> 가 «새로 추가된 줄에 구 팔레트 hex 가 있는가» 를 <strong>기계적으로</strong> 물을 수 있습니다.</p>
+        <p>정본을 안 정하면 검사할 대상이 없어서, 규칙이 영영 말로만 남습니다.</p>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- 18 원칙 2 Impact Matrix -->
+<section class="slide"><div class="inner">
+  <p class="principle-no">원칙 <b>02</b> / 06</p>
+  <h2>변경은 «점» 이 아니라 «파장» 이다</h2>
+  <p class="deck-h2-sub">스펙 한 줄을 고치면 IA·유저플로우·데이터모델·화면정책이 함께 움직입니다. 그 파장을 <strong>사람 기억이 아니라 표</strong>가 계산합니다.</p>
+  <div class="flowline">
+    <span class="step">변경 유형 분류</span><span class="arw">→</span>
+    <span class="step">Impact Matrix 조회</span><span class="arw">→</span>
+    <span class="step">영향 문서 목록 추출</span><span class="arw">→</span>
+    <span class="step">고정 순서로 업데이트</span><span class="arw">→</span>
+    <span class="step">완결성 체크리스트</span>
+  </div>
+  <div class="cols c2" style="margin-top:26px;">
+    <div class="card">
+      <span class="tag">고정 순서</span>
+      <h4>순서를 건너뛰지 않습니다</h4>
+      <p><span class="mono">arch-ia → arch-user-journey → arch-user-flow → arch-data-model → arch-ai-data-spec → screen-*.policy</span><br><br>계층이 위에서 아래로 흐르기 때문입니다. 데이터모델을 먼저 고치면 IA 와 어긋난 채로 굳습니다.</p>
+    </div>
+    <div class="card">
+      <span class="tag">완결성 검사</span>
+      <h4>정책서는 항목으로 잽니다</h4>
+      <p>접근 조건(권한+상태) · 컴포넌트 표시 조건 · 로딩/빈/에러 상태 · 모든 버튼의 트리거→결과 · API 시점과 실패 처리 · 역할별 뷰 차이 · <strong>엣지케이스 3개 이상.</strong><br><br>AI 화면이면 4항목 추가. 「잘 썼다」가 아니라 <strong>「빠진 게 있다/없다」</strong>로 판정합니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- 19 원칙 3 병렬화 -->
+<section class="slide"><div class="inner">
+  <p class="principle-no">원칙 <b>03</b> / 06</p>
+  <h2>한 저장소, 스물다섯 개의 손</h2>
+  <p class="deck-h2-sub">기획 영역마다 <strong>git worktree</strong> 를 하나씩 두고, 각 워크트리에 세션이 상시로 붙어 있습니다. 결제 영역 세션과 관리자 영역 세션이 동시에 다른 파일을 고칩니다.</p>
+  <div class="cols split">
+    <div>
+      <ul class="keys">
+        <li><span class="n">왜 브랜치가 아니라 워크트리</span><span class="d">브랜치는 한 번에 하나만 체크아웃됩니다. 워크트리는 <b>디렉터리가 25개</b>라 세션 25개가 진짜로 동시에 돕니다.</span></li>
+        <li><span class="n">누가 어디를 맡나</span><span class="d"><span class="mono">routing.json</span> 의 slug ↔ 폴더 표가 유일한 근거입니다. 티켓 디스패처도, 훅도 같은 표를 읽습니다.</span></li>
+        <li><span class="n">메인은 무엇을 하나</span><span class="d">저장소 설정·빌드 산출물·병합 루프. <b>기획 파일은 손대지 않습니다</b> — routing-guard 가 실제로 막습니다.</span></li>
+      </ul>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--deny);">
+        <span class="tag deny">실제 사고</span>
+        <h4>이 규칙이 생긴 사고</h4>
+        <p style="margin-bottom:14px;">메인 세션이 워크트리에 들어가 파일을 고쳤습니다. 진입 시점 <span class="mono">git status</span> 는 깨끗했습니다 — <strong>동시 편집은 그 뒤에 시작되니까요.</strong></p>
+        <p>그 워크트리 세션의 다른 작업이 같은 두 파일에 섞였고, 분리 커밋이 불가능해져 <strong>남의 미완성 작업이 함께 커밋됐습니다.</strong></p>
+      </div>
+      <div class="takeaway deny" style="margin-top:18px;">교훈: <b>「지금 깨끗하다」는 안전 신호가 아닙니다.</b> 동시성 문제는 관측 이후에 생깁니다.</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- 20 원칙 4 인계 -->
+<section class="slide"><div class="inner">
+  <p class="principle-no">원칙 <b>04</b> / 06</p>
+  <h2>인계는 도구가 강제한다</h2>
+  <p class="deck-h2-sub">세션 25개가 돌면 «넘기기» 가 일의 절반이 됩니다. 그래서 인계도 손이 아니라 <strong>스크립트</strong>로 합니다.</p>
+  <div class="cols split">
+    <div>
+<pre><span class="c"># slug ↔ 담당 폴더 표</span>
+python3 scripts/handoff.py --list
+
+<span class="c"># 인계 (근거 스탬프 없으면 전송 거부)</span>
+python3 scripts/handoff.py <span class="k">checkout</span> \
+  --title <span class="k">"환불 정책 §3 정정"</span> \
+  --brief-file brief.md
+
+<span class="c"># 보낼 내용만 확인</span>
+python3 scripts/handoff.py checkout … <span class="k">--dry-run</span></pre>
+    </div>
+    <div>
+      <ul class="keys">
+        <li><span class="n">근거 스탬프 강제</span><span class="d">브리핑에 <b>출처가 없으면 전송을 거부</b>합니다. 하루에 인계문 3건이 받는 쪽 실제 상태와 어긋난 뒤 세웠습니다.</span></li>
+        <li><span class="n">중복 감지</span><span class="d">직전과 같은 slug+같은 내용이면 경고. <em class="deny">한 세션이 같은 인계문을 8회 받은 날</em>이 있었습니다.</span></li>
+        <li><span class="n">발신자 명시</span><span class="d">누가 보냈는지·어디로 회신할지를 박습니다. 익명이라 「이미 했다」고 알릴 수조차 없었던 게 중복의 진짜 원인이었습니다.</span></li>
+        <li><span class="n">뒤처짐 경고</span><span class="d">받는 워크트리의 규칙·게이트가 몇 커밋 뒤처졌는지 자동으로 붙입니다.</span></li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- 21 원칙 5 근거의 사슬 -->
+<section class="slide"><div class="inner">
+  <p class="principle-no">원칙 <b>05</b> / 06</p>
+  <h2>내가 하지 않은 확인을 한 것처럼 적지 않는다</h2>
+  <p class="deck-h2-sub">이 저장소가 가장 많이, 가장 여러 얼굴로 데인 병입니다. AI 로 일할 때 특히 잘 납니다 — <strong>그럴듯한 문장이 관측처럼 읽히기 때문</strong>입니다.</p>
+  <div class="cols c3">
+    <div class="card">
+      <span class="tag deny">안 센 값</span>
+      <h4>「컨트롤러 46개 전수 확인」</h4>
+      <p>기획서 6종 이력에 근거로 박혔는데, <strong>우리는 컨트롤러를 세어 본 적이 없습니다.</strong> 카드 본문 표현을 옮긴 것이고 실제는 58개였습니다.</p>
+    </div>
+    <div class="card">
+      <span class="tag deny">좁은 검색</span>
+      <h4>「잔존 0건」</h4>
+      <p><span class="mono">workspaces/:wsId</span> 로만 검색한 결과였습니다. <span class="mono">:id</span>·<span class="mono">:workspaceId</span> 변종이 <strong>16파일에 남아</strong> 있었습니다.</p>
+    </div>
+    <div class="card">
+      <span class="tag deny">어긋난 단위</span>
+      <h4>「읽는 유일한 폴더」</h4>
+      <p>실제로 확인된 건 <strong>엔티티 전체</strong>를 읽는 유일한 폴더였습니다. <strong>필드 단위로는 다른 폴더도 읽었고</strong>, 그 결과 인계에서 한 폴더가 빠졌습니다.</p>
+    </div>
+  </div>
+  <div class="takeaway" style="margin-top:28px;">그래서 「전수 확인」류 주장에는 <b>«세는 법» 셋을 함께 적습니다 — 무엇을 · 어느 단위로 · 어떻게(도구·검색어).</b> 다음 사람이 값을 믿는 대신 <b>다시 셀 수 있어야</b> 합니다. 세는 값과 세는 법 중 오래 쓰이는 건 세는 법입니다 — 값은 다음 커밋에 낡습니다.</div>
+</div></section>
+
+<!-- 22 원칙 6 컨텍스트 -->
+<section class="slide"><div class="inner">
+  <p class="principle-no">원칙 <b>06</b> / 06</p>
+  <h2>50%에서 끊는다</h2>
+  <p class="deck-h2-sub">긴 세션의 진짜 위험은 «느려짐» 이 아니라, 자동 압축이 <strong>「지금 하던 일」을 요약된 기억으로 바꿔 놓는</strong> 것입니다. 원칙 05의 병이 컨텍스트 안에서 재현되는 자리입니다.</p>
+  <div class="cols split">
+    <div>
+      <div class="flowline" style="font-size:13px;">
+        <span class="step">50% 도달</span><span class="arw">→</span>
+        <span class="step">하던 한 가지만 마감</span><span class="arw">→</span>
+        <span class="step">인계 카드</span><span class="arw">→</span>
+        <span class="step mono">/clear</span><span class="arw">→</span>
+        <span class="step">새 세션이 카드만 이어받음</span>
+      </div>
+      <div class="takeaway" style="margin-top:20px;">50%인 이유: <b>아직 스스로 무엇을 넘길지 고를 수 있는 시점</b>이기 때문입니다. 압축은 아무 데서나 끼어듭니다.</div>
+    </div>
+    <div>
+      <div class="tablewrap">
+        <table style="min-width:0;">
+          <thead><tr><th>카드에 쓰는 것</th><th>쓰지 않는 것</th></tr></thead>
+          <tbody>
+            <tr><td><strong>지금 하던 일</strong> — 끝나지 않은 한 가지</td><td class="why">끝난 일 · 오늘 한 일 목록</td></tr>
+            <tr><td><strong>다음 한 걸음</strong> — 처음 할 행동 하나</td><td class="why">계획 전체 · 로드맵</td></tr>
+            <tr><td><strong>근거</strong> — 커밋 SHA · 「확인: … (날짜)」</td><td class="why">기억으로 쓴 상태 주장</td></tr>
+            <tr><td><strong>넘기지 않는 것</strong> — 일부러 뺀 것</td><td class="why">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px; color:var(--faint); margin-top:14px; line-height:1.6;">끝난 일은 넘기지 않습니다. 넘겨야 할 만큼 중요하면 그건 카드가 아니라 <strong>커밋·문서·티켓 코멘트</strong>에 있어야 합니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- 23 통합 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow">Session 2 · 정리</p>
+  <h2>여섯 원칙이 결국 한 가지입니다</h2>
+  <p class="deck-h2-sub">전부 <strong>「사람의 기억을 신뢰 대상에서 빼는」</strong> 장치입니다. 그리고 그 자리를 하네스가 대신 채웁니다.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>원칙</th><th>기억에 맡기면</th><th>하네스가 대신 하는 것</th></tr></thead>
+      <tbody>
+        <tr><td class="g">01 정본</td><td>「그건 아마 저기 적혀 있을 거예요」</td><td>SSOT 파일 지정 → 가드가 그 파일만 검사</td></tr>
+        <tr><td class="g">02 파장</td><td>「관련 문서도 같이 고쳤던 것 같은데」</td><td>Impact Matrix 조회 → 고정 순서 → 체크리스트</td></tr>
+        <tr><td class="g">03 병렬</td><td>「지금 저 파일 아무도 안 만지겠지」</td><td><span class="mono">routing-guard</span> 가 담당 아닌 쓰기를 거부</td></tr>
+        <tr><td class="g">04 인계</td><td>「전에 얘기했으니 알고 있겠지」</td><td><span class="mono">handoff.py</span> 가 근거 없는 인계문 전송을 거부</td></tr>
+        <tr><td class="g">05 근거</td><td>「전수 확인했습니다」</td><td>세는 법 3요소 병기 → 다음 사람이 다시 셀 수 있음</td></tr>
+        <tr><td class="g">06 컨텍스트</td><td>「어디까지 했더라」</td><td><span class="mono">ctx-relay-guard</span> 가 카드 없는 종료를 반려</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div></section>
+
+<!-- 24 다음 걸음 -->
+<section class="slide"><div class="inner">
+  <p class="eyebrow neutral">마무리</p>
+  <h2>이번 주에 해 볼 세 가지</h2>
+  <ol class="numlist" style="margin-top:8px;">
+    <li><span class="i">01</span><span class="t"><b>설치하고 <span class="mono">/init</span> 까지만 돌려 보세요.</b> 생성된 CLAUDE.md 를 읽고, 틀린 문장 하나를 고쳐 커밋합니다. 이게 하네스 1층입니다.</span></li>
+    <li><span class="i">02</span><span class="t"><b>이번 주에 한 번이라도 「아, 저번에도 이랬는데」 한 일을 하나 적으세요.</b> 그게 첫 훅의 후보입니다. 우리 가드 중 미리 설계한 건 하나도 없습니다.</span></li>
+    <li><span class="i">03</span><span class="t"><b>그 규칙을 CLAUDE.md 에 «왜» 와 함께 적으세요.</b> 규칙만 적으면 다음 사람이 지웁니다. 어떤 사고에서 나왔는지가 붙어 있어야 살아남습니다.</span></li>
+  </ol>
+  <div class="takeaway" style="margin-top:34px;">한 문장으로 남길 것 — <b>«모델을 더 잘 설득하려 하지 말고, 틀릴 수 있는 자리마다 검사를 두세요.»</b> 우리 저장소의 규칙은 전부 그렇게 한 번씩 데이고 나서 생겼습니다.</div>
+  <p style="margin-top:40px; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--faint);">질문 · 이어서 실습 세션 → 각자 저장소의 <span style="color:var(--muted);">CLAUDE.md</span> 를 같이 열어 봅니다.</p>
+</div></section>
+
+</main>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var ticksBox = document.getElementById('ticks');
+  var current = -1;
+
+  // 세션 구간 — 레일에 라벨로 드러낸다
+  var GROUPS = [
+    {label:null, from:0,  to:1},
+    {label:'S1', from:2,  to:17},
+    {label:'S2', from:18, to:slides.length - 1}
+  ];
+
+  var ticks = [];
+  var labels = [];
+  GROUPS.forEach(function(g){
+    if (g.label){
+      var l = document.createElement('div');
+      l.className = 'grp-label';
+      l.textContent = g.label;
+      ticksBox.appendChild(l);
+      labels.push({el:l, from:g.from, to:g.to});
+    }
+    for (var i = g.from; i <= g.to; i++){
+      (function(idx){
+        var b = document.createElement('button');
+        b.className = 'tick';
+        b.type = 'button';
+        b.setAttribute('aria-label', (idx+1) + '번 슬라이드로 이동');
+        b.addEventListener('click', function(){ go(idx); });
+        ticksBox.appendChild(b);
+        ticks[idx] = b;
+      })(i);
+    }
+  });
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function mark(i){
+    if (i === current || i < 0 || i >= slides.length) return;
+    current = i;
+    counter.textContent = pad(i+1) + ' / ' + pad(slides.length);
+    ticks.forEach(function(t, j){
+      if (j === i) t.setAttribute('aria-current', 'true');
+      else t.removeAttribute('aria-current');
+    });
+    labels.forEach(function(L){
+      if (i >= L.from && i <= L.to) L.el.classList.add('on');
+      else L.el.classList.remove('on');
+    });
+  }
+
+  function go(i){
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    slides[i].scrollIntoView({block:'start'});
+    mark(i);
+  }
+
+  function nearest(){
+    var best = 0, bestD = Infinity;
+    for (var i = 0; i < slides.length; i++){
+      var d = Math.abs(slides[i].getBoundingClientRect().top);
+      if (d < bestD){ bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  var raf = null;
+  window.addEventListener('scroll', function(){
+    if (raf) return;
+    raf = requestAnimationFrame(function(){ raf = null; mark(nearest()); });
+  }, {passive:true});
+
+  window.addEventListener('keydown', function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' '){
+      e.preventDefault(); go(nearest() + 1);
+    } else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp'){
+      e.preventDefault(); go(nearest() - 1);
+    } else if (k === 'Home'){
+      e.preventDefault(); go(0);
+    } else if (k === 'End'){
+      e.preventDefault(); go(slides.length - 1);
+    }
+  });
+
+  mark(0);
+})();
+</script>
+
+</body>
+</html>

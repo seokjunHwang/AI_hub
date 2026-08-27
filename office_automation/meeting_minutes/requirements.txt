@@ -1,0 +1,20 @@
+# Claude
+anthropic
+pydantic
+
+# 렌더링
+jinja2
+
+# 로컬 STT (외부 전송 없음). ffmpeg 가 PATH 에 있어야 함
+faster-whisper
+
+# 구글 드라이브
+google-api-python-client
+google-auth-oauthlib
+
+# 설정
+python-dotenv
+
+# 노트북 실행기 (run.ipynb)
+jupyterlab
+ipykernel

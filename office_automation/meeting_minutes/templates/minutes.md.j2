@@ -1,0 +1,81 @@
+# {{ m.title }}
+
+{{ ('**일시** ' ~ m.date) if m.date else '' }}{{ (' · **참석** ' ~ (m.participants | join(', '))) if m.participants else '' }}
+
+> {{ m.one_liner }}
+
+{% if m.action_items %}
+## 액션아이템
+
+| 할 일 | 논의 | 담당 | 마감 | 우선도 |
+|---|---|---|---|---|
+{% for a in m.action_items %}
+| {{ a.task }} | {{ a.topic if a.topic in m.topic_titles else '**논의 연결 없음**' }} | {{ a.owner or '**' ~ a.owner_display ~ '**' }} | {{ a.due or '**' ~ a.due_display ~ '**' }} | {{ a.priority }} |
+{% endfor %}
+
+{% set orphans = m.action_items | rejectattr('topic', 'in', m.topic_titles) | list %}
+{% if orphans %}
+> **논의 연결 없음 {{ orphans | length }}건** — 논의 내용 어디에도 근거가 없는 액션입니다.
+> 논의가 빠진 것인지, 잡담이라 액션이 아닌 것인지 확인하세요.
+{% endif %}
+
+{% set pending = m.action_items | selectattr('needs_human') | list %}
+{% if pending %}
+> **확정 전 확인 필요 {{ pending | length }}건** — «회의에서 안 정해짐» 은 참석자에게 묻고,
+> «녹취 불확실» 은 원본 오디오를 다시 들어야 합니다. 추측으로 채우지 마세요.
+{% endif %}
+
+{% endif %}
+{% if m.decisions %}
+## 결정사항
+
+{% for d in m.decisions %}
+### {{ loop.index }}. {{ d.decision }}
+
+- **논의**: {{ d.topic if d.topic in m.topic_titles else '**논의 연결 없음**' }}
+{% if d.rationale %}
+- **왜**: {{ d.rationale }}
+{% endif %}
+{% if d.alternatives %}
+- **검토했으나 미채택**: {{ d.alternatives | join(' / ') }}
+{% endif %}
+- 근거: "{{ d.quote }}"{{ (' · ' ~ d.timestamp) if d.timestamp else '' }}
+
+{% endfor %}
+{% endif %}
+{% if m.open_questions %}
+## 미결 사항
+
+{% for q in m.open_questions %}
+- {{ '**[블로커]** ' if q.blocker else '' }}{{ q.question }}{{ (' — 확인: ' ~ q.who_should_answer) if q.who_should_answer else '' }} `{{ q.topic if q.topic in m.topic_titles else '논의 연결 없음' }}`
+{% endfor %}
+
+{% endif %}
+{% if m.topics %}
+## 논의 내용
+
+{% for t in m.topics %}
+### {{ t.title }}{{ (' `' ~ t.timestamp_start ~ '`') if t.timestamp_start else '' }}
+
+{{ t.summary }}
+
+{% set from_here = m.items_by_topic(t.title) %}
+{% if from_here %}
+{% for lab, text in from_here %}
+> **{{ lab }}** {{ text }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+{% if m.unclear_notes %}
+## 확인 필요 (STT 불확실 구간)
+
+{% for u in m.unclear_notes %}
+- {{ u }}
+{% endfor %}
+
+{% endif %}
+---
+
+<sub>{{ b.model }} 자동 생성 · {{ b.generated_at }}{{ (' · 원본 ' ~ b.source_audio) if b.source_audio else '' }} · 녹취 {{ b.transcript_chars }}자</sub>
