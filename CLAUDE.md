@@ -5,7 +5,7 @@
 | 폴더 | 무엇 | 먼저 읽을 것 |
 |---|---|---|
 | `hospital_rag_assistant/` | 세브란스 병원 챗봇: 시나리오 단독 → 시나리오를 가드레일로 쓰는 RAG | `docs/00~11`, `진행상황.md` |
-| `office_automation/` | 사무업무 자동화 (회의록 · 하네스 문서 · jsx 뷰어) | `meeting_minutes/README.md` |
+| `office_automation/` | 사무업무 자동화 (회의록 · 하네스 문서 · jsx 뷰어) | `meeting_minutes/README.md` — 사용법은 그 첫 섹션 |
 | `docs/` | 이 리포에서 쓰는 기능 정리 | `docs/기능정리.md` |
 
 진행 기록은 루트 `진행상황.md` 에 날짜별 불릿으로만 씁니다 (장황하게 쓰지 않음).
@@ -15,6 +15,8 @@
 - **MCP**: Google Drive · Notion · Gmail · Calendar (claude.ai 커넥터) · Playwright (브라우저)
 - **Skill**: `meeting-minutes` (`office_automation/meeting_minutes/.claude/skills/`)
 - **추출은 `claude -p` (CLI)** — Anthropic API 키를 쓰지 않음
+- **회의록 실행 방법 3가지**: `회의록_GUI.bat` 더블클릭 / `run.ipynb` / `python -m src.pipeline`
+  - GUI·CLI 모두 `src/pipeline.py` 의 같은 단계 함수를 부름 (로직 중복 금지)
 - 상세: `docs/기능정리.md`
 
 ## 이 리포의 규칙
@@ -24,6 +26,8 @@
 3. **규칙을 두 곳에 적지 않는다.** 추출 규칙 정본은 `prompts/extract_system.md`. 프롬프트에 다시 쓰지 않는다
 4. **조용히 덮어쓰지 않는다.** 같은 이름이면 `_v2` 로 넘긴다
 5. **막힌 것도 기록한다.** 다음에 같은 시도를 반복하지 않도록 진행상황에 남긴다
+6. **인터페이스를 바꿨으면 문서도 같이.** CLI 옵션·스키마를 고치면 `README.md` ·
+   `SKILL.md` · 템플릿까지 훑는다 (지워진 CLI 옵션이 문서에 그대로 남아 있던 적이 있다)
 
 ## 알아둘 제약
 
