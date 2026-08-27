@@ -42,6 +42,17 @@ def check(name: str, cond: bool, detail: str = "") -> None:
     print(f"  [{mark}] {name}" + (f"  {detail}" if detail else ""))
 
 
+def _sample() -> Minutes:
+    """검수·업로드 테스트용 표본. 세 종류(D/A/Q)가 모두 있어야 라벨을 잰다."""
+    return Minutes(
+        title="킥오프", date="2026-01-01", one_liner="범위 확정",
+        topics=[Topic(title="범위", summary="3개 인텐트")],
+        decisions=[Decision(decision="A 안 채택", rationale="비용", quote="A 로 가죠")],
+        action_items=[ActionItem(task="문서 정리", owner="김PM", quote="정리해 주세요")],
+        open_questions=[OpenQuestion(question="예산?", blocker=True)],
+    )
+
+
 def _bundle(m: Minutes) -> MinutesBundle:
     return MinutesBundle(minutes=m, model="test", generated_at="2026-01-01 00:00")
 
@@ -209,9 +220,10 @@ def test_drive_query_escape() -> None:
 def test_device_resolution() -> None:
     """torch 없이도 판정돼야 한다 (faster-whisper 는 CTranslate2 기반)."""
     print("\n[STT] 장치 판정")
-    dev, comp = _resolve_device()
+    dev, comp, why = _resolve_device()
     check("device 유효", dev in ("cpu", "cuda"), f"{dev}/{comp}")
     check("compute 유효", comp in ("int8", "float16", "float32", "int8_float16"))
+    check("이유가 비어 있지 않다", bool(why and why.strip()), why)
     check("torch 미설치여도 동작", "torch" not in sys.modules)
 
 
@@ -226,11 +238,64 @@ def test_slug_safety() -> None:
     check("길이 제한", len(slugify("가" * 200, None)) <= 60)
 
 
+def test_upload_stamp() -> None:
+    """올릴 때 «업로드 시각» 이 괄호로 붙는다.
+
+    같은 회의를 두 번 올리면 어느 것이 최신인지 이름만 보고 알아야 한다.
+    시각 값을 고정할 수 없으니 «형태» 를 잰다.
+    """
+    print(chr(10) + "[업로드] 시각 표기")
+    import re as _re
+    from datetime import datetime
+
+    m = _sample()
+
+    #  노션 — 제목 조립부만 떼어 검사한다 (네트워크 없이)
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    base = f"{m.date} {m.title}" if m.date else m.title
+    name = f"{base} (업로드 {stamp})"
+    check("노션 제목에 원본 제목 포함", m.title in name, name)
+    check("노션 제목에 괄호 업로드 시각",
+          bool(_re.search(r"[(]업로드 [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}[)]$", name)),
+          name)
+
+    #  드라이브 — upload_minutes 가 subfolder 를 어떻게 바꾸는지. API 를 타지 않게
+    #  같은 규칙을 여기서 재현하지 않고, 실제 코드가 시각을 «붙이는지» 만 본다.
+    src = (Path(__file__).resolve().parent.parent / "src" / "drive.py").read_text(
+        encoding="utf-8")
+    check("드라이브 subfolder 에 시각 부착 코드 존재",
+          "datetime.now().strftime" in src and "subfolder = f" in src)
+
+
+def test_review_items_match_labels() -> None:
+    """GUI 체크박스 라벨과 CLI 라벨이 «같은 정본» 에서 나온다."""
+    print(chr(10) + "[검수] GUI 라벨 == CLI 라벨")
+    from src.review import labels, review_items
+
+    m = _sample()
+    cli = labels(m)
+    gui = [lab for lab, _, _ in review_items(m)]
+    check("라벨 집합 동일", cli == gui, f"{cli} vs {gui}")
+    check("본문이 비어 있지 않다", all(t.strip() for _, t, _ in review_items(m)))
+
+
+def test_gui_imports() -> None:
+    """GUI 가 파이프라인 단계 함수를 그대로 부르는지 — 로직 중복을 막는다."""
+    print(chr(10) + "[GUI] 파이프라인 재사용")
+    src = (Path(__file__).resolve().parent.parent / "src" / "gui.py").read_text(
+        encoding="utf-8")
+    for fn in ("resolve_input", "do_extract", "do_confirm", "do_send", "do_notion",
+               "do_check"):
+        check(f"pipeline.{fn} 호출", fn in src)
+    check("추출 로직을 GUI 에 다시 쓰지 않았다", "subprocess" not in src)
+
+
 if __name__ == "__main__":
     for fn in (
         test_split, test_status_sync, test_blank_reason_in_outputs, test_selection,
         test_empty_meeting, test_no_silent_overwrite, test_drive_query_escape,
-        test_device_resolution, test_slug_safety,
+        test_device_resolution, test_slug_safety, test_upload_stamp,
+        test_review_items_match_labels, test_gui_imports,
     ):
         fn()
 

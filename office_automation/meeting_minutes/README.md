@@ -90,7 +90,21 @@ AMD·Intel GPU 는 몇 장이 있어도 쓰지 못한다 (ROCm·DirectML 미지�
 | AMD GPU 를 쓰고 싶다면 | **whisper.cpp (Vulkan 백엔드)** 또는 **Const-me/Whisper**(DirectCompute). 별도 도구이므로 결과 텍스트를 `--transcript` 로 넣는다 |
 | 클라우드 STT | Clova Note 등. 단 오디오가 외부로 나간다 (기밀 정책 확인 필요) |
 
-## 실행 (권장) — 노트북
+## 실행 (가장 쉬움) — GUI
+
+**[`회의록_GUI.bat`](회의록_GUI.bat) 더블클릭.** tkinter 라 추가 설치가 없습니다.
+
+| 모드 | 언제 | 무엇을 하는가 |
+|---|---|---|
+| **사람검수 모드** (기본) | 평소 | 추출 후 **멈춘다.** 결정·액션·미결이 체크박스로 뜨고, 고른 것만 확정·업로드 |
+| **오토 모드** | 새벽 배치·급할 때 | 멈추지 않고 전부 반영 → 확정 → 드라이브·노션까지 한 번에 |
+
+- 창에서 고른 값은 **이번 실행만** 적용됩니다. `.env` 파일은 건드리지 않습니다.
+- 파이썬은 `.env` 의 `PYTHON=` → 폴더의 `.venv` → PATH 순으로 찾습니다.
+- STT 는 몇 분 걸리므로 별 스레드에서 돌고, 진행 상황이 아래 로그창에 흐릅니다.
+- **어떤 오류도 창을 닫지 않습니다.** 로그에 원인을 적고 버튼이 되살아납니다.
+
+## 실행 — 노트북 (셀 단위로 들여다볼 때)
 
 ```powershell
 jupyter lab       # meeting_minutes 폴더에서 실행
@@ -102,23 +116,35 @@ CLI 보다 노트북을 권하는 이유는 **4번 멈춤 게이트** 때문입�
 > ⚠ **커밋 전 `Kernel → Restart & Clear All Outputs`.** 노트북 출력에 실제 회의 내용이 남습니다.
 > (`data/` 는 이미 gitignore 돼 있지만 노트북 출력은 파일 안에 박힙니다.)
 
-## 실행 (CLI) — 2단 구조
+## 실행 (CLI) — 스케줄러·자동화용
+
+`.env` 가 정본이고, 인자는 **이번 실행만** 덮어씁니다.
 
 ```powershell
-# 1단  추출 → 검토 목록 출력하고 멈춤
-python -m src.pipeline --audio data/audio/kickoff.m4a --title "킥오프" --date 2026-08-25
+# 검수 모드 (기본) — 추출하고 검토 목록만 출력하고 멈춘다
+python -m src.pipeline
 
-# 2단  고른 것만 확정 + 업로드
-python -m src.pipeline --draft data/minutes/draft/2026-08-25_킥오프.draft.json --accept D1,D2,A1,A3 --upload
+# 오토 모드 — 전부 반영 + 드라이브·노션 업로드까지. 새벽 스케줄러용
+python -m src.pipeline --auto
 
-# 한 번에 (사용자가 "다 반영" 했을 때만)
-python -m src.pipeline --transcript data/transcripts/kickoff.txt --accept all --upload
+# 멈춘 뒤, 고른 것만 확정
+python -m src.pipeline --draft "data/minutes/draft/....json" --accept D1,D2,A1
+
+# 입력·제목만 바꿔서
+python -m src.pipeline --transcript data/transcripts/kickoff.txt --title 킥오프 --date 2026-08-25
+
+# 연결 상태만 확인 (입력·드라이브 토큰·노션 페이지)
+python -m src.pipeline --check
 
 # STT 만
 python -m src.pipeline --audio data/audio/kickoff.m4a --stt-only
 ```
 
-1단 출력:
+GUI 와 CLI 는 **같은 함수**(`src/pipeline.py` 의 `resolve_input` · `do_extract` ·
+`do_confirm` · `do_send` · `do_notion`)를 부릅니다. 두 쪽이 다르게 동작하면
+«어느 쪽이 맞나» 를 알 수 없어서입니다.
+
+검수 모드에서 멈출 때 나오는 목록 (GUI 는 이걸 체크박스로 그립니다):
 
 ```
 [결정사항]
@@ -199,16 +225,21 @@ python -m src.pipeline --draft <draft.json> --accept all --upload
 src/schema.py       회의록 구조 (= 스키마 정본. 빈칸 라벨도 여기)
 src/transcribe.py   로컬 STT (faster-whisper, VAD 필터)
 src/extract.py      Claude API 추출 (경로 2 전용). 길면 분할 → 병합
+src/extract_cli.py  claude -p 추출 (기본 경로). 인용 검증·재시도 포함
 src/review.py       멈춤 게이트 — 번호 부여·선택·필터
 src/render.py       md / html / json 렌더
 src/sync.py         드라이브 동기화 폴더 복사 (설정 불필요)
 src/drive.py        드라이브 API 업로드 (OAuth)
-src/pipeline.py     CLI
+src/drive_accounts.py  내 드라이브가 맞는지 확인 (남의 계정 업로드 차단)
+src/notion.py       노션 업로드 (API 토큰 · 블록 직접 생성)
+src/pipeline.py     단계 함수 + CLI. GUI 도 여기를 부른다
+src/gui.py          GUI (검수 모드 / 오토 모드)
 prompts/            추출 규칙 (여기를 고쳐서 품질 조정)
 templates/          출력 포맷
 tests/test_offline.py  API 없이 도는 회귀 테스트 66개
 setup.ipynb         환경 준비 (한 번)
 run.ipynb           실제 사용 (매번)
+회의록_GUI.bat      GUI 더블클릭 실행
 .claude/skills/     Claude Code 가 따르는 절차서
 ```
 
@@ -218,6 +249,19 @@ python tests/test_offline.py     # 코드 정상 여부 판정. 여기가 통과
 
 **품질이 아쉬우면 코드가 아니라 [`prompts/extract_system.md`](prompts/extract_system.md)를 고친다.**
 
+## 업로드에는 «업로드 시각» 이 붙는다
+
+같은 회의를 여러 번 올리면 어느 것이 최신인지 알 수 없습니다. 그래서 올릴 때
+괄호로 연·월·일·시각을 붙입니다.
+
+| 대상 | 이름 |
+|---|---|
+| 노션 페이지 | `2026-08-25 킥오프 (업로드 2026-08-27 14:32)` |
+| 드라이브 하위 폴더 | `2026-08-25_킥오프 (2026-08-27 1432)` |
+
+로컬 파일명은 그대로 두고 `_v2` 규칙을 씁니다 — 로컬은 이미 덮어쓰기 방지가 있고,
+파일명에 시각이 들어가면 같은 회의의 재생성본을 짝지어 보기 어렵습니다.
+
 ## 긴 회의 처리
 
 입력이 `MAX_INPUT_TOKENS`(기본 300k)를 넘으면 자동으로 시간순 분할 추출 후 병합한다. 2시간 한국어 회의는 보통 분할 없이 한 번에 처리된다.
@@ -226,5 +270,6 @@ python tests/test_offline.py     # 코드 정상 여부 판정. 여기가 통과
 
 - **화자분리(diarization)** — pyannote는 HF 토큰 + 약관 동의가 필요하고 오디오 처리 위치가 정책 문제가 된다. 지금은 화자 라벨 없이 진행하고, 발언에서 이름이 언급될 때만 참석자를 잡는다.
   > 담당자 확정률을 올리는 데는 diarization보다 **회의 마지막 3분에 "액션 확인" 순서를 넣는 것**이 훨씬 효과적이다.
-- Slack / Notion / GitHub Issue 연동 (다음 단계)
+- Slack / GitHub Issue 연동 (노션·드라이브는 완료)
 - 액션아이템 칸반 뷰어 (`.json` 여러 개를 모아서)
+- 새벽 3시 스케줄러 (작업 스케줄러 → `python -m src.pipeline --auto`)

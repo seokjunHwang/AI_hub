@@ -72,6 +72,9 @@ class Config:
 
     # ---- 3. 추출 ----
     extract_mode: str = field(default_factory=lambda: _s("EXTRACT_MODE", "cli"))
+    #  cli 모드: claude -p 에 넘기는 --model / --effort
+    cli_model: str = field(default_factory=lambda: _s("CLI_MODEL"))
+    cli_effort: str = field(default_factory=lambda: _s("CLI_EFFORT"))
     model: str = field(default_factory=lambda: _s("CLAUDE_MODEL", "claude-opus-5"))
     max_tokens: int = field(default_factory=lambda: _i("CLAUDE_MAX_TOKENS", 16000))
     max_input_tokens: int = field(default_factory=lambda: _i("MAX_INPUT_TOKENS", 300000))
@@ -104,6 +107,9 @@ class Config:
     sync_dir: str = field(default_factory=lambda: _s("SYNC_DIR"))
 
     # ---- 7. 노션 ----
+    #  api = 토큰으로 직접 호출 (무인 자동화 가능) / mcp = 채팅창에서 Claude 에게
+    notion_mode: str = field(default_factory=lambda: _s("NOTION_MODE", "api"))
+    notion_token: str = field(default_factory=lambda: _s("NOTION_TOKEN"))
     notion_target: str = field(default_factory=lambda: _s("NOTION_TARGET"))
 
     # ---- 8. 기타 ----
@@ -146,16 +152,43 @@ class Config:
             f"입력      audio={self.input_audio or '-'}  transcript={self.input_transcript or '-'}",
             f"회의      title={self.meeting_title or '(자동)'}  date={self.meeting_date or '(미지정)'}",
             f"STT       {self.whisper_model} / {self.whisper_device} / {self.language}",
-            f"추출      mode={self.extract_mode}  model={self.model}  API키={key}",
+            f"추출      mode={self.extract_mode}"
+            + (f"  {self.cli_model or '(기본)'}/{self.cli_effort or '(기본)'}"
+               if self.extract_mode == "cli" else f"  model={self.model}  API키={key}"),
             f"검토      accept={self.accept or '(노트북에서 직접)'}",
             f"산출물    {self.output_dir}  layout={self.output_layout}  overwrite={self.output_overwrite}",
             f"전송      send={self.send or '(로컬만)'}",
             f"드라이브   {self.drive_folder_name} / subfolder={self.drive_subfolder}"
             f"  gdoc={self.drive_as_gdoc}",
             f"          scope={self.drive_scope.rsplit('/', 1)[-1]}",
-            f"노션      {self.notion_target or '(건너뜀)'}",
+            f"노션      mode={self.notion_mode}  토큰={'설정됨' if self.notion_token else '없음'}"
+            f"  대상={'있음' if self.notion_target else '없음'}",
         ]
         return "\n".join(lines)
 
 
 CFG = Config()
+
+
+def reload() -> Config:
+    """`.env` 를 다시 읽어 CFG 를 «제자리에서» 갱신한다.
+
+    왜 새 객체를 만들지 않는가
+        다른 모듈들이 `from .config import CFG` 로 «그 객체» 를 붙잡고 있다.
+        새로 만들어 대입하면 이 모듈의 이름만 바뀌고 남들은 옛 객체를 계속 본다.
+        그래서 필드만 덮어써서 «같은 객체» 를 갱신한다.
+
+    커널 재시작이 필요한 경우는 여전히 있다 — config.py 자체(필드 추가·삭제)를
+    고쳤을 때다. 값만 바뀐 `.env` 는 이 함수로 충분하다.
+    """
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(override=True)   # override=True 여야 이미 로드된 값을 덮어쓴다
+    except ImportError:
+        pass
+
+    fresh = Config()
+    for k, v in vars(fresh).items():
+        setattr(CFG, k, v)
+    return CFG

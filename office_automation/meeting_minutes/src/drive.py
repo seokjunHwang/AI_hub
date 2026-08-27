@@ -11,9 +11,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from .config import CFG
 
@@ -205,6 +206,11 @@ def upload_minutes(
     """
     if as_gdoc is None:
         as_gdoc = CFG.drive_as_gdoc
+
+    #  같은 회의를 여러 번 올릴 때 «어느 것이 최신인지» 를 폴더명만 보고 알 수 있게
+    #  업로드 시각을 괄호로 붙인다.
+    if subfolder:
+        subfolder = f"{subfolder} ({datetime.now().strftime('%Y-%m-%d %H%M')})"
 
     svc = _service()
     account = _account_email(svc)

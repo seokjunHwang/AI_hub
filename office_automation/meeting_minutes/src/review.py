@@ -154,3 +154,31 @@ def _topic_of(m: Minutes, item) -> str:
     if item.topic and item.topic in set(m.topic_titles):
         return item.topic
     return f"<{ORPHAN}>" + (f" (topic={item.topic!r})" if item.topic else "")
+
+
+def review_items(m: Minutes) -> List[Tuple[str, str, str]]:
+    """GUI 체크박스용. (라벨, 본문, 부가정보) 목록.
+
+    render_review() 는 «사람이 읽는 글», 이 함수는 «UI 가 그리는 데이터» 다.
+    라벨 규칙을 GUI 가 따로 계산하면 두 곳이 어긋나므로 여기서만 만든다.
+    """
+    out: List[Tuple[str, str, str]] = []
+    orphans = {lab for lab, _ in orphan_items(m)}
+
+    def note(lab: str, extra: str = "") -> str:
+        bits = [extra] if extra else []
+        if lab in orphans:
+            bits.append(ORPHAN)
+        return " · ".join(bits)
+
+    for i, d in enumerate(m.decisions, 1):
+        lab = f"D{i}"
+        out.append((lab, d.decision, note(lab, d.rationale and f"왜: {d.rationale}" or "")))
+    for i, a in enumerate(m.action_items, 1):
+        lab = f"A{i}"
+        out.append((lab, a.task,
+                    note(lab, f"담당 {a.owner_display} / 마감 {a.due_display}")))
+    for i, q in enumerate(m.open_questions, 1):
+        lab = f"Q{i}"
+        out.append((lab, q.question, note(lab, "블로커" if q.blocker else "")))
+    return out
