@@ -10,6 +10,49 @@
                                                                      Google Drive 업로드
 ```
 
+## 사용법 — 셋 중 하나
+
+| | 방법 | 언제 |
+|---|---|---|
+| **A** | [`회의록_GUI.bat`](회의록_GUI.bat) **더블클릭** | 평소. 가장 쉽다 |
+| **B** | `jupyter lab` → [`run.ipynb`](run.ipynb) | 중간 결과를 셀 단위로 들여다볼 때 |
+| **C** | `python -m src.pipeline` | 스케줄러·배치 |
+
+### A. GUI (권장)
+
+1. **`회의록_GUI.bat` 더블클릭**
+2. **입력** — `녹취록(.txt)` 또는 `오디오`(STT 부터) 를 고르고 «찾기…» 로 파일 선택
+   (`.env` 에 적어 둔 값이 이미 채워져 있다)
+3. **모드** — `사람검수` 또는 `오토` 중 하나
+4. **`▶ 실행`**
+5. 검수 모드면 추출이 끝나고 **멈춘다** → 아래 체크박스에서 뺄 항목을 해제 → **`✔ 확정 후 업로드`**
+
+처음 한 번은 **`연결 확인`** 버튼을 먼저 눌러 보는 게 좋다. 입력·드라이브 토큰·노션
+페이지를 실제로 찔러 보고 `O / X` 로 알려준다. 여기서 `X` 면 실행해도 같은 데서 막힌다.
+
+### 무엇이 어디로 가는가
+
+```
+                     ┌─▶ data/minutes/<날짜>/<제목>/  (로컬 . 항상)
+녹취록 ──▶ 추출 ──▶ 확정 ─┼─▶ 구글 드라이브 «내 드라이브 / 회의록 / <제목> (업로드시각)»
+                     └─▶ 노션 «회의록 자동업로드» 아래 새 페이지
+```
+
+드라이브·노션은 GUI 체크박스로 끌 수 있다. 끄면 로컬에만 저장된다.
+
+### 자주 바꾸는 값은 `.env` 한 곳에 있다
+
+| 하고 싶은 것 | `.env` 에서 고칠 것 |
+|---|---|
+| 추출 품질을 올리고 싶다 | `CLI_EFFORT=max` (느림) / `high` (빠름) |
+| STT 가 너무 느리다 | `WHISPER_MODEL=small` |
+| 드라이브 폴더 이름 | `DRIVE_FOLDER_NAME` |
+| 노션 올릴 위치 | `NOTION_TARGET` (페이지 URL) |
+| 업로드를 아예 끄고 싶다 | `SEND=` · `NOTION_MODE=` (비우기) |
+| GUI 가 쓸 파이썬 | `PYTHON=` |
+
+`.env` 를 고친 뒤 GUI 는 **`.env` 다시 읽기**, 노트북은 **1번 셀 재실행**이면 반영된다.
+
 ## 설계 포인트
 
 **1. 요약이 아니라 구조 추출이다.** 출력은 산문이 아니라 [`src/schema.py`](src/schema.py)의 `Minutes` 스키마다. `decisions` / `action_items` / `open_questions` / `unclear_notes`로 쪼개진 데이터라서 다음 자동화(GitHub Issue 생성, 칸반)의 입력이 된다.
@@ -28,7 +71,7 @@
 
 **3-1. 한 번 멈춘다.** 추출 결과를 바로 문서로 만들지 않고 `D1/A1/Q1` 번호로 제시하고 멈춘다. **회의에서 나온 말이 전부 결정은 아니고**, 어느 것이 결정인지는 참석한 사람만 안다.
 
-**3-2. 조용히 덮어쓰지 않는다.** 같은 제목·날짜로 다시 돌리면 `_v2`, `_v3` 로 저장한다 (`--overwrite` 로 강제 가능).
+**3-2. 조용히 덮어쓰지 않는다.** 같은 제목·날짜로 다시 돌리면 `_v2`, `_v3` 로 저장한다 (`.env` 의 `OUTPUT_OVERWRITE=true` 로 강제 가능).
 
 **4. STT 오인식을 숨기지 않는다.** 문맥상 이상한 구간은 `unclear_notes`에 남긴다. 숫자·날짜·금액·고유명사가 여기 걸리면 반드시 확인해야 한다.
 
@@ -36,21 +79,24 @@
 
 ## 추출을 누가 하는가 — 두 경로
 
-`②추출` 만 갈린다. STT·렌더·동기화는 같다.
+`②추출` 만 갈린다. STT·렌더·업로드는 같다.
 
+| | 누가 추출하나 | 어떻게 켜나 | 특징 |
+|---|---|---|---|
+| **경로 1** (기본) | `claude -p` (Claude Code 구독) | `.env` 의 `EXTRACT_MODE=cli` | **API 키 불필요.** 인용 검증·자동 재시도 있음 |
+| 경로 2 | Anthropic API | `EXTRACT_MODE=api` + `ANTHROPIC_API_KEY` | 긴 회의 자동 분할·병합 |
+
+두 경로 모두 **명령은 같다.** `EXTRACT_MODE` 만 바꾸면 된다.
+
+```powershell
+python -m src.pipeline            # 검수 모드
+python -m src.pipeline --auto     # 오토 모드
 ```
-경로 1 (API 키 없음 · 이 환경의 기본)
-  ① STT     python -m src.pipeline --audio <파일> --stt-only
-  ② 추출     Claude Code(CLI) 가 녹취록을 읽고 Minutes JSON 을 만든다
-  ③ 검토     python -m src.pipeline --minutes-json <json>
-  ④ 확정     python -m src.pipeline --draft <draft> --accept D1,A1 --sync
 
-경로 2 (API 키 있음)
-  ①②③      python -m src.pipeline --audio <파일> --title "..."     (extract.py 가 호출)
-  ④         python -m src.pipeline --draft <draft> --accept D1,A1 --sync
-```
+경로 1 의 추출 규칙은 [`prompts/extract_system.md`](prompts/extract_system.md) 가 정본이다.
+사람이 대신 추출할 때(채팅창에서 시킬 때) 지켜야 하는 절차는
+[`.claude/skills/meeting-minutes/SKILL.md`](.claude/skills/meeting-minutes/SKILL.md) 에 있다.
 
-경로 1에서 Claude Code 가 지켜야 하는 규칙은 [`.claude/skills/meeting-minutes/SKILL.md`](.claude/skills/meeting-minutes/SKILL.md) 에 있다.
 스키마는 추측하지 말고 뽑아 쓴다.
 
 ```powershell
@@ -63,7 +109,7 @@ python -m src.pipeline --print-schema
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env      # 경로 2를 쓸 때만 ANTHROPIC_API_KEY 채우기
+cp .env.example .env      # 여기가 모든 설정의 정본. 경로 2 를 쓸 때만 ANTHROPIC_API_KEY
 ```
 
 - **ffmpeg 필요** (오디오 압축 해제): `winget install Gyan.FFmpeg`
@@ -90,21 +136,21 @@ AMD·Intel GPU 는 몇 장이 있어도 쓰지 못한다 (ROCm·DirectML 미지�
 | AMD GPU 를 쓰고 싶다면 | **whisper.cpp (Vulkan 백엔드)** 또는 **Const-me/Whisper**(DirectCompute). 별도 도구이므로 결과 텍스트를 `--transcript` 로 넣는다 |
 | 클라우드 STT | Clova Note 등. 단 오디오가 외부로 나간다 (기밀 정책 확인 필요) |
 
-## 실행 (가장 쉬움) — GUI
-
-**[`회의록_GUI.bat`](회의록_GUI.bat) 더블클릭.** tkinter 라 추가 설치가 없습니다.
+## GUI 가 어떻게 동작하나
 
 | 모드 | 언제 | 무엇을 하는가 |
 |---|---|---|
 | **사람검수 모드** (기본) | 평소 | 추출 후 **멈춘다.** 결정·액션·미결이 체크박스로 뜨고, 고른 것만 확정·업로드 |
 | **오토 모드** | 새벽 배치·급할 때 | 멈추지 않고 전부 반영 → 확정 → 드라이브·노션까지 한 번에 |
 
-- 창에서 고른 값은 **이번 실행만** 적용됩니다. `.env` 파일은 건드리지 않습니다.
-- 파이썬은 `.env` 의 `PYTHON=` → 폴더의 `.venv` → PATH 순으로 찾습니다.
-- STT 는 몇 분 걸리므로 별 스레드에서 돌고, 진행 상황이 아래 로그창에 흐릅니다.
-- **어떤 오류도 창을 닫지 않습니다.** 로그에 원인을 적고 버튼이 되살아납니다.
+- **로직이 GUI 에 없다.** [`src/pipeline.py`](src/pipeline.py) 의 단계 함수를 그대로 부른다.
+  GUI 와 CLI 가 다르게 동작하면 «어느 쪽이 맞나» 를 알 수 없어서다 (테스트가 이걸 검사한다)
+- 창에서 고른 값은 **이번 실행만** 적용된다. `.env` 파일은 건드리지 않는다
+- 작업은 **별 스레드**에서 돈다. STT 가 몇 분 걸려도 창이 얼지 않고 로그가 흐른다
+- **어떤 오류도 창을 닫지 않는다.** 원인을 로그에 적고 버튼이 되살아난다
+- 파이썬은 `.env` 의 `PYTHON=` → 폴더의 `.venv` → PATH 순으로 찾는다
 
-## 실행 — 노트북 (셀 단위로 들여다볼 때)
+## 노트북 (셀 단위로 들여다볼 때)
 
 ```powershell
 jupyter lab       # meeting_minutes 폴더에서 실행
@@ -116,7 +162,7 @@ CLI 보다 노트북을 권하는 이유는 **4번 멈춤 게이트** 때문입�
 > ⚠ **커밋 전 `Kernel → Restart & Clear All Outputs`.** 노트북 출력에 실제 회의 내용이 남습니다.
 > (`data/` 는 이미 gitignore 돼 있지만 노트북 출력은 파일 안에 박힙니다.)
 
-## 실행 (CLI) — 스케줄러·자동화용
+## CLI — 스케줄러·자동화용
 
 `.env` 가 정본이고, 인자는 **이번 실행만** 덮어씁니다.
 
@@ -165,59 +211,67 @@ GUI 와 CLI 는 **같은 함수**(`src/pipeline.py` 의 `resolve_input` · `do_e
   ! 녹취가 불확실해 확인 못 한 액션 1건 — 원본 오디오 재확인
 ```
 
-## 구글 드라이브 연동 — 두 가지 방법
+## 구글 드라이브 연동 — `SEND` 가 방식을 정한다
 
-### 방법 A. 동기화 폴더 (권장 · 설정 0)
+`.env` 의 `SEND` 한 값으로 갈린다. **지금 쓰는 값은 `SEND=api` 다.**
 
-**Drive for desktop 이 이미 돌고 있으면 OAuth·API·credentials.json 이 전혀 필요 없다.**
-동기화 폴더에 파일을 복사만 하면 Drive 가 알아서 올린다.
+| `SEND` | 방식 | 설정 | 공유 링크 | Docs 변환 | 스케줄러 |
+|---|---|---|---|---|---|
+| `api` (현재) | Drive API 업로드 | Google Cloud OAuth | O | O | O |
+| `sync` | Drive for desktop 폴더에 복사 | 없음 | X | X | X (가상드라이브가 안 보임) |
+| (비움) | 로컬에만 저장 | — | — | — | O |
 
-```powershell
-python -m src.pipeline --check-sync                       # 폴더 확인
-python -m src.pipeline --draft <draft.json> --accept all --sync
-```
+### `SEND=api` 준비 (이미 완료됨)
 
-`--check-sync` 가 폴더를 못 찾으면 탐색기에서 «내 드라이브» 경로를 확인해 `.env` 에 넣는다.
+1. Google Cloud Console → **Google Drive API 사용 설정**
+2. 사용자 인증 정보 → OAuth 클라이언트 ID → **데스크톱 앱** → JSON 을 `credentials.json` 으로 저장
+   (`gcloud` 로는 만들 수 없다. Console UI 전용)
+3. 첫 실행 때 브라우저 인증 → `token.json` 자동 생성
+
+**스코프 주의**: 기본은 `drive.file`(이 앱이 만든 파일만 접근 — 최소 권한). 이미 수동으로
+만들어 둔 폴더에 넣으려면 `DRIVE_SCOPE` 를 `https://www.googleapis.com/auth/drive` 로 올리고
+`token.json` 을 지우고 재인증한다 (코드가 스코프 불일치를 감지해 알려준다).
+
+### `SEND=sync` 를 쓸 때
+
+`SYNC_DIR` 을 **직접** 적어야 한다. 자동 탐색을 일부러 안 한다 — 이 PC 에는 다른 사람
+계정의 동기화 폴더도 있어서, 잘못 찾으면 남의 드라이브에 회의록이 올라간다.
 
 ```
 SYNC_DIR=G:\내 드라이브\회의록
 ```
 
-> Drive for desktop 의 가상 드라이브(G:, H: 등)는 **대화형 사용자 세션에만 보인다.**
-> 스크립트를 스케줄러·서비스로 돌리면 경로를 못 찾을 수 있다. 그때는 방법 B 를 쓴다.
+`MY_DRIVE_EMAIL` 을 채워 두면 업로드 전에 «내 계정인지» 확인하고, 아니면 막는다
+([`src/drive_accounts.py`](src/drive_accounts.py)).
 
-### 방법 B. Drive API (공유 링크·Docs 변환이 필요할 때)
-
-1. Google Cloud Console → 프로젝트 → **Google Drive API 사용 설정**
-2. 사용자 인증 정보 → OAuth 클라이언트 ID → **데스크톱 앱** → JSON 다운로드 → `credentials.json`
-3. 첫 `--upload` 실행 시 브라우저 인증 → `token.json` 자동 생성
-
-```powershell
-python -m src.pipeline --draft <draft.json> --accept all --upload
-```
-
-### 비교
-
-| | `--sync` (방법 A) | `--upload` (방법 B) |
-|---|---|---|
-| 설정 | 없음 | Google Cloud OAuth |
-| 공유 링크 자동 획득 | X (탐색기에서 수동) | O |
-| Google Docs 변환 | X | O |
-| 업로드 완료 확인 | X (Drive 가 비동기) | O |
-| 대화형 세션 밖 | X | O |
-
-업로드 구조는 둘 다 같다.
+### 올라가는 구조
 
 ```
-내 드라이브/회의록/<날짜>_<제목>/
+내 드라이브 / 회의록 / <날짜>_<제목> (업로드 2026-08-27 1502) /
 ├── <날짜>_<제목>.md
 ├── <날짜>_<제목>.html
-└── <날짜>_<제목>.json
+├── <날짜>_<제목>.json
+└── <날짜>_<제목>            ← Google Docs 변환본 (DRIVE_AS_GDOC=true)
 ```
 
-**스코프 주의 (방법 B)**: 기본은 `drive.file`(이 앱이 만든 파일만 접근 — 최소 권한).
-이미 수동으로 만들어둔 폴더에 넣으려면 `DRIVE_SCOPE` 를 `https://www.googleapis.com/auth/drive` 로
-올리고 `token.json` 을 지우고 재인증한다 (코드가 스코프 불일치를 감지해 알려준다).
+## 노션 연동 — `NOTION_MODE=api`
+
+**토큰 방식을 쓴다.** MCP 커넥터는 대화형 Claude 세션에서만 붙어서, 새벽 스케줄러처럼
+사람이 없는 실행에서는 권한 승인 창이 없어 도구 호출이 막힌다.
+
+준비물은 **두 가지**이고, 하나만 있으면 404 가 난다.
+
+| | 무엇 | 어디서 |
+|---|---|---|
+| 1 | 토큰 → `.env` 의 `NOTION_TOKEN` | notion.so → 설정 → 연결 → **개발자 포털** → 내부 통합 |
+| 2 | **그 통합을 페이지에 초대** | 올릴 페이지 → `•••` → 연결 → 만든 통합 추가 |
+| 3 | 페이지 URL → `.env` 의 `NOTION_TARGET` | 그 페이지 → `•••` → 링크 복사 |
+
+2 번이 노션의 함정이다. 토큰이 맞아도 페이지에 초대하지 않으면 **없는 페이지**로 보인다.
+`--check` 나 GUI 의 «연결 확인» 이 이 둘을 구분해서 알려준다 (401 = 토큰, 404 = 초대).
+
+마크다운을 거치지 않고 [`src/notion.py`](src/notion.py) 가 `Minutes` 구조를 **블록으로 직접**
+만든다 — 액션은 체크박스, 근거는 인용, 한 줄 요약은 콜아웃. 마크다운 변환보다 정확하다.
 
 ## 파일 구성
 
